@@ -1,0 +1,39 @@
+body { 
+    font-family: Arial, sans-serif; 
+    margin: 20px; 
+}
+
+.container { 
+    max-width: 1200px; 
+    margin: 0 auto; 
+}
+
+.message-box { 
+    border: 1px solid #ccc; 
+    padding: 10px; 
+    margin: 10px 0; 
+    background: #f9f9f9; 
+    border-radius: 4px;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
+.orderbook { 
+    background: #e8f5e8; 
+}
+
+.trade { 
+    background: #ffe8e8; 
+}
+
+.stats { 
+    background: #e8e8f5; 
+    padding: 15px; 
+    border-radius: 4px; 
+    margin-bottom: 20px; 
+}
+
+.header { 
+    text-align: center; 
+    margin-bottom: 30px; 
+}

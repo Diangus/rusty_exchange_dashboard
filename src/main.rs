@@ -36,7 +36,7 @@ fn load_config() -> Result<Config, Box<dyn std::error::Error + Send + Sync>> {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-struct InstrumentDetails {
+pub struct InstrumentDetails {
     name: String,
     underlying: String,
     absolute_limit: f64,
@@ -133,16 +133,10 @@ async fn redis_pump(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut conn = redis_client.get_connection()?;
 
-    // Subscribe to market_data channel
     let mut pubsub = conn.as_pubsub();
     pubsub.subscribe("market_data")?;
 
-    // Optional: heartbeat to keep idle connections alive
-    let mut hb = tokio::time::interval(std::time::Duration::from_secs(15));
-
     loop {
-        // Use a simple timeout-based approach for Redis pub/sub
-        // This is a simplified version - in production you'd want better async handling
         match pubsub.get_message() {
             Ok(msg) => {
                 if let Ok(payload) = msg.get_payload::<String>() {
@@ -173,20 +167,13 @@ async fn redis_pump(
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
         }
-
-        // Send heartbeat every 15 seconds
-        let _ = hb.tick().await;
-        let bytes = Arc::new(Bytes::from_static(b": keep-alive\n\n"));
-        for tx in instrument_tx.values() {
-            let _ = tx.send(bytes.clone());
-        }
     }
 }
 
 // API endpoint to get available instruments
 async fn get_instruments(app_state: web::Data<AppState>) -> Result<impl actix_web::Responder> {
     let instruments: Vec<serde_json::Value> = app_state
-        .instruments
+        .instrument_details
         .iter()
         .map(|(name, underlying)| {
             serde_json::json!({
@@ -227,17 +214,9 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    // Create simplified instruments mapping for backward compatibility
-    let instruments_mapping: HashMap<String, String> = instruments
-        .iter()
-        .map(|(name, details)| (name.clone(), details.underlying.clone()))
-        .collect();
-
-    // Create enhanced AppState
     let app_state = AppState {
         redis_client: Arc::new(redis_client.clone()),
         tera: Arc::new(tera),
-        instruments: instruments_mapping,
         instrument_details: instruments,
         instrument_tx: instrument_tx.clone(),
     };
@@ -247,7 +226,7 @@ async fn main() -> std::io::Result<()> {
 
     let server_address = format!("{}:{}", config.server_host, config.server_port);
     println!("Server starting on http://{}", server_address);
-    println!("Loaded {} instruments", app_state.instruments.len());
+    println!("Loaded {} instruments", app_state.instrument_details.len());
 
     HttpServer::new(move || {
         App::new()
@@ -267,10 +246,8 @@ async fn main() -> std::io::Result<()> {
 }
 
 async fn index(app_state: web::Data<AppState>) -> Result<actix_web::HttpResponse> {
-    let mut context = tera::Context::new();
-    context.insert("instrument", "BTC/USD"); // Example instrument
-
-    match app_state.tera.render("index.html", &context) {
+    let ctx = tera::Context::new();
+    match app_state.tera.render("index.html", &ctx) {
         Ok(content) => Ok(actix_web::HttpResponse::Ok()
             .content_type("text/html; charset=utf-8")
             .body(content)),
@@ -282,10 +259,8 @@ async fn index(app_state: web::Data<AppState>) -> Result<actix_web::HttpResponse
 }
 
 async fn dashboard(app_state: web::Data<AppState>) -> Result<actix_web::HttpResponse> {
-    let mut context = tera::Context::new();
-    context.insert("instrument", "BTC/USD"); // Example instrument
-
-    match app_state.tera.render("dashboard.html", &context) {
+    let ctx = tera::Context::new();
+    match app_state.tera.render("dashboard.html", &ctx) {
         Ok(content) => Ok(actix_web::HttpResponse::Ok()
             .content_type("text/html; charset=utf-8")
             .body(content)),
@@ -300,8 +275,6 @@ async fn dashboard(app_state: web::Data<AppState>) -> Result<actix_web::HttpResp
 pub struct AppState {
     pub redis_client: Arc<RedisClient>,
     pub tera: Arc<Tera>,
-    // Instrument data
-    pub instruments: HashMap<String, String>, // instrument -> underlying (for backward compatibility)
     pub instrument_details: HashMap<String, InstrumentDetails>, // instrument -> full details
     pub instrument_tx: HashMap<String, broadcast::Sender<Arc<Bytes>>>, // instrument -> SSE channel
 }

@@ -7,14 +7,12 @@
 import DataManager from './dataManager.js';
 import ChartManager from './chartManager.js';
 import TableManager from './tableManager.js';
-import UIManager from './uiManager.js';
 
 class MarketDataApp {
     constructor() {
         this.dataManager = new DataManager();
         this.chartManager = new ChartManager('market-chart');
         this.tableManager = new TableManager();
-        this.uiManager = new UIManager();
         this.eventSource = null;
         this.liveGraphInterval = null;
 
@@ -23,12 +21,9 @@ class MarketDataApp {
 
     async initialize() {
         try {
-            // Initialize UI components
-            this.uiManager.initialize();
-            
             // Initialize table manager
             this.tableManager.initialize();
-            
+
             // Initialize chart
             this.chartManager.initializeChart();
 
@@ -37,16 +32,13 @@ class MarketDataApp {
 
             // Setup event listeners
             this.setupEventListeners();
-            
-            // Setup pause/resume callbacks
-            this.setupPauseResumeCallbacks();
-            
+
             this.isInitialized = true;
-            this.uiManager.showNotification('Market Data Application initialized successfully', 'success');
-            
+            console.log('[SUCCESS] Market Data Application initialized successfully');
+
         } catch (error) {
             console.error('Failed to initialize Market Data Application:', error);
-            this.uiManager.showNotification('Failed to initialize application', 'error');
+            console.log('[ERROR] Failed to initialize application');
         }
     }
 
@@ -67,12 +59,17 @@ class MarketDataApp {
         });
     }
 
-    setupPauseResumeCallbacks() {
-        // Register callbacks for pause functionality
-        this.uiManager.onResume(() => {
-            this.refreshAllDisplays();
-        });
+
+
+    // Update statistics display
+    updateStatistics(stats) {
+        document.getElementById('msgCount').textContent = stats.messageCount;
+        document.getElementById('orderbookCount').textContent = stats.orderbookCount;
+        document.getElementById('tradeCount').textContent = stats.tradeCount;
+        document.getElementById('lastPrice').textContent = stats.lastPrice || '-';
     }
+
+
 
     setupLiveGraphTimer() {
         // Clear any existing timer
@@ -82,19 +79,16 @@ class MarketDataApp {
 
         // Set up timer to update live graph 4 times per second (every 250ms)
         this.liveGraphInterval = setInterval(() => {
-            // Only update if not paused
-            if (!this.uiManager.getPauseState()) {
-                try {
-                    // Get fresh chart data from dataManager
-                    this.dataManager.cleanOldData();
-                    const chartData = this.dataManager.getChartData();
-                    const cachedPriceRange = this.dataManager.getCachedPriceRange();
+            try {
+                // Get fresh chart data from dataManager
+                this.dataManager.cleanOldData();
+                const chartData = this.dataManager.getChartData();
+                const cachedPriceRange = this.dataManager.getCachedPriceRange();
 
-                    // Update the live graph
-                    this.chartManager.updateChart(chartData, cachedPriceRange, this.dataManager.CHART_DURATION);
-                } catch (error) {
-                    console.error('Error updating live graph:', error);
-                }
+                // Update the live graph
+                this.chartManager.updateChart(chartData, cachedPriceRange, this.dataManager.CHART_DURATION);
+            } catch (error) {
+                console.error('Error updating live graph:', error);
             }
         }, 100); // 100ms = 10 times per second
 
@@ -113,18 +107,18 @@ class MarketDataApp {
             
                 this.eventSource.onerror = (event) => {
                     console.error('EventSource failed:', event);
-                    this.uiManager.showNotification('Connection error - attempting to reconnect', 'warning');
+                    console.log('[WARNING] Connection error - attempting to reconnect');
                     // Could implement reconnection logic here
                 };
-            
+
                 this.eventSource.onopen = () => {
                     console.log('EventSource connection established');
-                    this.uiManager.showNotification(`Connected to market data stream for instrument ${instrument}`, 'success');
+                    console.log(`[SUCCESS] Connected to market data stream for instrument ${instrument}`);
                 };
-            
+
             } catch (error) {
                 console.error('Failed to initialize EventSource:', error);
-                this.uiManager.showNotification('Failed to connect to market data stream', 'error');
+                console.log('[ERROR] Failed to connect to market data stream');
             }
         });
     }
@@ -133,12 +127,9 @@ class MarketDataApp {
         try {
             const message = JSON.parse(event.data);
             const messageType = this.dataManager.processMessage(message);
-            
-            // Only update visual displays if not paused
-            if (!this.uiManager.getPauseState()) {
-                this.updateDisplays(messageType, message);
-            }
-            
+
+            this.updateDisplays(messageType, message);
+
         } catch (error) {
             console.error('Error processing message:', error);
         }
@@ -146,7 +137,7 @@ class MarketDataApp {
 
     updateDisplays(messageType, message) {
         // Update statistics
-        this.uiManager.updateStatistics(this.dataManager.getStatistics());
+        this.updateStatistics(this.dataManager.getStatistics());
 
         // Update specific displays based on message type
         if (messageType === 'orderbook') {
@@ -181,17 +172,10 @@ class MarketDataApp {
         this.chartManager.updateChart(chartData, cachedPriceRange, this.dataManager.CHART_DURATION);
         
         // Update statistics display
-        this.uiManager.updateStatistics(this.dataManager.getStatistics());
+        this.updateStatistics(this.dataManager.getStatistics());
     }
 
     // Public API methods
-    pause() {
-        this.uiManager.setPauseState(true);
-    }
-
-    resume() {
-        this.uiManager.setPauseState(false);
-    }
 
     getStatistics() {
         return this.dataManager.getStatistics();
@@ -244,28 +228,23 @@ class MarketDataApp {
 
         // Clear table displays
         if (this.tableManager) {
-            console.log('📊 Clearing table displays');
             this.tableManager.clearTables();
         }
 
         // Reset chart (but don't destroy it completely)
         if (this.chartManager) {
-            console.log('📈 Resetting chart');
             // The chart manager doesn't have a reset method, but we can call updateChart with empty data
             const emptyChartData = { bbo: [], trades: [] };
             this.chartManager.updateChart(emptyChartData, null, this.dataManager.CHART_DURATION);
         }
 
         // Reset statistics display
-        if (this.uiManager) {
-            console.log('📊 Resetting statistics display');
-            this.uiManager.updateStatistics({
-                messageCount: 0,
-                orderbookCount: 0,
-                tradeCount: 0,
-                lastPrice: null
-            });
-        }
+        this.updateStatistics({
+            messageCount: 0,
+            orderbookCount: 0,
+            tradeCount: 0,
+            lastPrice: null
+        });
 
         // Restart live graph timer after reset
         if (this.isInitialized) {

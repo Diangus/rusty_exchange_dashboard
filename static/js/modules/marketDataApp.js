@@ -16,7 +16,8 @@ class MarketDataApp {
         this.tableManager = new TableManager();
         this.uiManager = new UIManager();
         this.eventSource = null;
-        
+        this.liveGraphInterval = null;
+
         this.isInitialized = false;
     }
 
@@ -30,6 +31,9 @@ class MarketDataApp {
             
             // Initialize chart
             this.chartManager.initializeChart();
+
+            // Setup live graph timer (4 times per second)
+            this.setupLiveGraphTimer();
 
             // Setup event listeners
             this.setupEventListeners();
@@ -68,6 +72,32 @@ class MarketDataApp {
         this.uiManager.onResume(() => {
             this.refreshAllDisplays();
         });
+    }
+
+    setupLiveGraphTimer() {
+        // Clear any existing timer
+        if (this.liveGraphInterval) {
+            clearInterval(this.liveGraphInterval);
+        }
+
+        // Set up timer to update live graph 4 times per second (every 250ms)
+        this.liveGraphInterval = setInterval(() => {
+            // Only update if not paused
+            if (!this.uiManager.getPauseState()) {
+                try {
+                    // Get fresh chart data from dataManager
+                    const chartData = this.dataManager.getChartData();
+                    const cachedPriceRange = this.dataManager.getCachedPriceRange();
+
+                    // Update the live graph
+                    this.chartManager.updateChart(chartData, cachedPriceRange);
+                } catch (error) {
+                    console.error('Error updating live graph:', error);
+                }
+            }
+        }, 100); // 100ms = 10 times per second
+
+        console.log('📊 Live graph timer started (10 updates per second)');
     }
 
     initializeEventSource(instrument) {
@@ -236,10 +266,22 @@ class MarketDataApp {
             });
         }
 
+        // Restart live graph timer after reset
+        if (this.isInitialized) {
+            this.setupLiveGraphTimer();
+        }
+
         console.log('✅ Market Data Application reset complete');
     }
 
     cleanup() {
+        // Clear live graph timer
+        if (this.liveGraphInterval) {
+            clearInterval(this.liveGraphInterval);
+            this.liveGraphInterval = null;
+            console.log('⏰ Live graph timer cleared');
+        }
+
         if (this.eventSource) {
             this.eventSource.close();
         }

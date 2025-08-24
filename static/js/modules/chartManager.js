@@ -13,18 +13,18 @@ class ChartManager {
     initializeChart() {
         const container = d3.select(`#${this.containerId}`);
         container.selectAll('*').remove(); // Clear any existing content
-        
+
         const margin = {top: 20, right: 50, bottom: 40, left: 50};
         const width = container.node().getBoundingClientRect().width - margin.left - margin.right;
         const height = 400 - margin.top - margin.bottom;
-        
+
         const svg = container.append('svg')
             .attr('width', width + margin.left + margin.right)
             .attr('height', height + margin.top + margin.bottom);
-        
+
         const g = svg.append('g')
             .attr('transform', `translate(${margin.left},${margin.top})`);
-        
+
         // Create tooltip
         const tooltip = d3.select('body').append('div')
             .attr('class', 'tooltip')
@@ -39,7 +39,7 @@ class ChartManager {
             .style('pointer-events', 'none')
             .style('z-index', '1000')
             .style('box-shadow', '0 4px 12px rgba(0, 0, 0, 0.3)');
-        
+
         this.chart = {
             svg, g, width, height, margin, tooltip,
             xScale: d3.scaleTime().range([0, width]),
@@ -50,12 +50,12 @@ class ChartManager {
                 .defined(d => d.price !== null && d.price !== undefined)
                 .curve(d3.curveStepAfter)
         };
-        
+
         this._createAxes(g, width, height);
         this._createAxisLabels(g, width, height, margin);
         this._createLines(g);
         this._createTradesContainer(g);
-        
+
         this.isInitialized = true;
     }
 
@@ -96,7 +96,7 @@ class ChartManager {
             .style('fill', 'none')
             .style('stroke', '#34d399')
             .style('stroke-width', 2);
-        
+
         this.chart.askLine = g.append('path')
             .attr('class', 'ask-line')
             .style('fill', 'none')
@@ -191,9 +191,9 @@ class ChartManager {
         // Update line segments for non-continuous data
         const segments = container.selectAll(`.${className}`)
             .data(dataSegments, (d, i) => i);
-        
+
         segments.exit().remove();
-        
+
         segments.enter().append('path')
             .attr('class', className)
             .style('fill', 'none')
@@ -249,8 +249,6 @@ class ChartManager {
         
         return dataSegments;
     }
-
-
 
     _updateTradeDots(chartData) {
         // Update trade dots

@@ -94,7 +94,8 @@ class DataManager {
             this.chartData.bbo.push({
                 timestamp,
                 bestBid: bbo.bestBid,
-                bestAsk: bbo.bestAsk
+                bestAsk: bbo.bestAsk,
+                real: true,
             });
 
             // Update price range incrementally
@@ -199,8 +200,23 @@ class DataManager {
         return this.cachedStatistics;
     }
 
-    // Get chart data
     getChartData() {
+        if (this.chartData.bbo.length === 0) {
+            return this.chartData;
+        }
+        let lastBBO = this.chartData.bbo[this.chartData.bbo.length - 1];
+        if (!lastBBO.real) {
+            // Don't want to generate lots of copy of data in the chart data, so just update the timestamp
+            this.chartData.bbo[this.chartData.bbo.length - 1].timestamp = Date.now();
+            return this.chartData;
+        }
+        // Add a copy of the last BBO with the timestamp of now
+        this.chartData.bbo.push({
+            timestamp: Date.now(),
+            bestBid: lastBBO.bestBid,
+            bestAsk: lastBBO.bestAsk,
+            real: false
+        });
         return this.chartData;
     }
 

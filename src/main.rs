@@ -79,6 +79,7 @@ async fn load_static_data(
     let instruments_data: Vec<serde_json::Value> = serde_json::from_str(&instruments_data_str)
         .unwrap_or_else(|_| vec![]);
 
+
     for instrument in instruments_data {
         if let (Some(name), Some(underlying), Some(tick_size)) = (
             instrument.get("name").and_then(|v| v.as_str()),
@@ -86,15 +87,15 @@ async fn load_static_data(
             instrument.get("tick_size").and_then(|v| v.as_f64()),
         ) {
             // Load absolute limit for this instrument
-            let limit_key = format!("static_data:{}:absolute_limit", name);
+            let limit_key = format!("static_data:{}_absolute_limit", name);
             let absolute_limit = redis::cmd("GET")
                 .arg(&limit_key)
                 .query::<f64>(&mut conn)
-                .unwrap_or(1000.0); // Default value if not found
+                .unwrap();
 
             // Get delta limit for the underlying, or use default
-            let delta_limit = delta_limits.get(underlying).copied().unwrap_or(20.0);
-            let max_order_size = 10000.0; // Default max order size
+            let delta_limit = delta_limits.get(underlying).copied().unwrap();
+            let max_order_size = 50.0;
 
             let instrument_details = InstrumentDetails {
                 name: name.to_string(),
@@ -142,6 +143,12 @@ async fn redis_pump(
                 if let Ok(payload) = msg.get_payload::<String>() {
                     if let Ok(json_data) = serde_json::from_str::<serde_json::Value>(&payload) {
                         // Extract instrument field from message
+                        if let Some(msg_type) = json_data.get("type").and_then(|v| v.as_str()) {
+                            // Skip any messages that are not orderbook_update, bbo_update or trade
+                            if msg_type != "orderbook_update" && msg_type != "bbo_update" && msg_type != "trade" {
+                                continue;
+                            }
+                        }
                         if let Some(instrument_name) = json_data.get("instrument").and_then(|v| v.as_str()) {
                             // Route message to appropriate instrument channel
                             if let Some(tx) = instrument_tx.get(instrument_name) {
@@ -153,7 +160,7 @@ async fn redis_pump(
                                 println!("Warning: Received message for unknown instrument: {}", instrument_name);
                             }
                         } else {
-                            println!("Warning: Received market_data message without instrument field");
+                            println!("Warning: Received market_data message without instrument field: {}", payload);
                         }
                     } else {
                         println!("Warning: Failed to parse market_data message as JSON: {}", payload);
@@ -246,7 +253,26 @@ async fn main() -> std::io::Result<()> {
 }
 
 async fn index(app_state: web::Data<AppState>) -> Result<actix_web::HttpResponse> {
-    let ctx = tera::Context::new();
+    let mut ctx = tera::Context::new();
+
+    // Convert instrument details to a format suitable for Tera templates
+    let instruments: Vec<serde_json::Value> = app_state
+        .instrument_details
+        .iter()
+        .map(|(_name, details)| {
+            serde_json::json!({
+                "name": details.name,
+                "underlying": details.underlying,
+                "absolute_limit": details.absolute_limit,
+                "delta_limit": details.delta_limit,
+                "tick_size": details.tick_size,
+                "max_order_size": details.max_order_size
+            })
+        })
+        .collect();
+
+    ctx.insert("instruments", &instruments);
+
     match app_state.tera.render("index.html", &ctx) {
         Ok(content) => Ok(actix_web::HttpResponse::Ok()
             .content_type("text/html; charset=utf-8")
@@ -259,7 +285,26 @@ async fn index(app_state: web::Data<AppState>) -> Result<actix_web::HttpResponse
 }
 
 async fn dashboard(app_state: web::Data<AppState>) -> Result<actix_web::HttpResponse> {
-    let ctx = tera::Context::new();
+    let mut ctx = tera::Context::new();
+
+    // Convert instrument details to a format suitable for Tera templates
+    let instruments: Vec<serde_json::Value> = app_state
+        .instrument_details
+        .iter()
+        .map(|(_name, details)| {
+            serde_json::json!({
+                "name": details.name,
+                "underlying": details.underlying,
+                "absolute_limit": details.absolute_limit,
+                "delta_limit": details.delta_limit,
+                "tick_size": details.tick_size,
+                "max_order_size": details.max_order_size
+            })
+        })
+        .collect();
+
+    ctx.insert("instruments", &instruments);
+
     match app_state.tera.render("dashboard.html", &ctx) {
         Ok(content) => Ok(actix_web::HttpResponse::Ok()
             .content_type("text/html; charset=utf-8")

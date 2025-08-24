@@ -112,33 +112,43 @@ class ChartManager {
 
     updateChart(chartData, cachedPriceRange = null) {
         if (!this.chart || !this.isInitialized || chartData.bbo.length === 0) return;
-        
+
         const now = Date.now();
         const fiveMinutesAgo = now - (5 * 60 * 1000);
-        
+
         // Update scales
         this.chart.xScale.domain([fiveMinutesAgo, now]);
-        
-        // Use cached price range if provided, otherwise calculate
+
+        // Handle price range - if no data, use a default range
+        let hasValidPriceRange = false;
         if (cachedPriceRange && cachedPriceRange.min !== null && cachedPriceRange.max !== null) {
             const padding = (cachedPriceRange.max - cachedPriceRange.min) * 0.1 || 1;
             this.chart.yScale.domain([cachedPriceRange.min - padding, cachedPriceRange.max + padding]);
+            hasValidPriceRange = true;
         } else {
             // Fallback to calculating price range (expensive)
             const allPrices = [];
             chartData.bbo.forEach(d => {
-                if (d.bestBid) allPrices.push(d.bestBid);
-                if (d.bestAsk) allPrices.push(d.bestAsk);
+                if (d.bestBid && typeof d.bestBid === 'number' && !isNaN(d.bestBid)) allPrices.push(d.bestBid);
+                if (d.bestAsk && typeof d.bestAsk === 'number' && !isNaN(d.bestAsk)) allPrices.push(d.bestAsk);
             });
             chartData.trades.forEach(d => allPrices.push(d.price));
-            
+
             if (allPrices.length > 0) {
                 const priceExtent = d3.extent(allPrices);
                 const padding = (priceExtent[1] - priceExtent[0]) * 0.1 || 1;
                 this.chart.yScale.domain([priceExtent[0] - padding, priceExtent[1] + padding]);
+                hasValidPriceRange = true;
             }
         }
-        
+
+        // If no valid price range and no data, set a default range
+        if (!hasValidPriceRange && chartData.bbo.length === 0 && chartData.trades.length === 0) {
+            // Set a default price range when there's no data (after reset)
+            this.chart.yScale.domain([100, 200]); // Default range
+            console.log('📊 Using default price range for empty chart');
+        }
+
         this._updateAxes();
         this._updateBBOLines(chartData);
         this._updateTradeDots(chartData);
@@ -168,8 +178,8 @@ class ChartManager {
         
         // Update bid line segments
         this._updateLineSegments(bidSegments, 'bid-line-segment', this.chart.g, '#34d399');
-        
-        // Update ask line segments  
+
+        // Update ask line segments
         this._updateLineSegments(askSegments, 'ask-line-segment', this.chart.g, '#f87171');
         
         // Hide the original single lines since we're now using segments
@@ -292,13 +302,13 @@ class ChartManager {
         if (this.chart && this.chart.tooltip) {
             this.chart.tooltip.remove();
         }
-        
+
         // Clean up line segments
         if (this.chart && this.chart.g) {
             this.chart.g.selectAll('.bid-line-segment').remove();
             this.chart.g.selectAll('.ask-line-segment').remove();
         }
-        
+
         this.isInitialized = false;
     }
 }

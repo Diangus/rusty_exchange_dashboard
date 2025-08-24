@@ -50,21 +50,37 @@ class TableManager {
 
     updateOrderbookTable(orderbook, cachedBBO = null) {
         if (!this.orderbookTableBody) return;
-        
+
         this.orderbookTableBody.innerHTML = '';
-        
+
         // Convert bids and asks to maps for easier lookup by price
         const bidsMap = new Map();
         const asksMap = new Map();
-        
-        orderbook.bids.forEach(([price, volume]) => {
-            bidsMap.set(price, volume);
-        });
-        
-        orderbook.asks.forEach(([price, volume]) => {
-            asksMap.set(price, volume);
-        });
-        
+
+        if (orderbook.bids && Array.isArray(orderbook.bids)) {
+            orderbook.bids.forEach((order, index) => {
+                const price = order.price;
+                const leaves_qty = order.leaves_qty;
+                if (typeof price === 'number' && typeof leaves_qty === 'number') {
+                    // Sum up leaves_qty for orders at the same price level
+                    const existingVolume = bidsMap.get(price) || 0;
+                    bidsMap.set(price, existingVolume + leaves_qty);
+                }
+            });
+        }
+
+        if (orderbook.asks && Array.isArray(orderbook.asks)) {
+            orderbook.asks.forEach((order, index) => {
+                const price = order.price;
+                const leaves_qty = order.leaves_qty;
+                if (typeof price === 'number' && typeof leaves_qty === 'number') {
+                    // Sum up leaves_qty for orders at the same price level
+                    const existingVolume = asksMap.get(price) || 0;
+                    asksMap.set(price, existingVolume + leaves_qty);
+                }
+            });
+        }
+
         const tick_size = 0.1;
         const totalRows = 10;
         
@@ -74,8 +90,21 @@ class TableManager {
             bestBid = cachedBBO.bestBid;
             bestAsk = cachedBBO.bestAsk;
         } else {
-            bestBid = orderbook.bids.length > 0 ? Math.max(...orderbook.bids.map(([price]) => price)) : null;
-            bestAsk = orderbook.asks.length > 0 ? Math.min(...orderbook.asks.map(([price]) => price)) : null;
+            bestBid = null;
+            if (orderbook.bids && Array.isArray(orderbook.bids) && orderbook.bids.length > 0) {
+                const bidPrices = orderbook.bids.map(order => order.price).filter(price => typeof price === 'number' && !isNaN(price));
+                if (bidPrices.length > 0) {
+                    bestBid = Math.max(...bidPrices);
+                }
+            }
+
+            bestAsk = null;
+            if (orderbook.asks && Array.isArray(orderbook.asks) && orderbook.asks.length > 0) {
+                const askPrices = orderbook.asks.map(order => order.price).filter(price => typeof price === 'number' && !isNaN(price));
+                if (askPrices.length > 0) {
+                    bestAsk = Math.min(...askPrices);
+                }
+            }
         }
         
         // Calculate the middle price for centering
@@ -112,7 +141,7 @@ class TableManager {
             const bidVolume = bidsMap.get(price) || '';
             const askVolume = asksMap.get(price) || '';
             const isEmpty = !bidVolume && !askVolume;
-            
+
             // Highlight the BBO levels
             const isBestBid = price === bestBid;
             const isBestAsk = price === bestAsk;

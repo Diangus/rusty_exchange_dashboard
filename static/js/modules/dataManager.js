@@ -53,11 +53,32 @@ class DataManager {
     calculateBBO(orderbook) {
         // Only recalculate if orderbook reference changed
         if (this.cachedBBO.orderbook !== orderbook) {
-            this.cachedBBO.bestBid = orderbook.bids.length > 0 ? Math.max(...orderbook.bids.map(([price]) => price)) : null;
-            this.cachedBBO.bestAsk = orderbook.asks.length > 0 ? Math.min(...orderbook.asks.map(([price]) => price)) : null;
+            // Handle the case where orderbook might be null/undefined
+            if (!orderbook) {
+                this.cachedBBO.bestBid = null;
+                this.cachedBBO.bestAsk = null;
+            } else {
+                // bids and asks are arrays of Order objects with price property
+                // Handle each side independently - one side can be empty while the other has data
+                this.cachedBBO.bestBid = null;
+                if (orderbook.bids && Array.isArray(orderbook.bids) && orderbook.bids.length > 0) {
+                    const bidPrices = orderbook.bids.map(order => order.price).filter(price => typeof price === 'number' && !isNaN(price));
+                    if (bidPrices.length > 0) {
+                        this.cachedBBO.bestBid = Math.max(...bidPrices);
+                    }
+                }
+
+                this.cachedBBO.bestAsk = null;
+                if (orderbook.asks && Array.isArray(orderbook.asks) && orderbook.asks.length > 0) {
+                    const askPrices = orderbook.asks.map(order => order.price).filter(price => typeof price === 'number' && !isNaN(price));
+                    if (askPrices.length > 0) {
+                        this.cachedBBO.bestAsk = Math.min(...askPrices);
+                    }
+                }
+            }
             this.cachedBBO.orderbook = orderbook;
         }
-        
+
         return {
             bestBid: this.cachedBBO.bestBid,
             bestAsk: this.cachedBBO.bestAsk
@@ -66,66 +87,100 @@ class DataManager {
 
     // Add BBO data point
     addBBOData(orderbook) {
-        const timestamp = Date.now();
-        const bbo = this.calculateBBO(orderbook);
-        
-        this.chartData.bbo.push({
-            timestamp,
-            bestBid: bbo.bestBid,
-            bestAsk: bbo.bestAsk
-        });
-        
-        // Update price range incrementally
-        this._updatePriceRange(bbo.bestBid, bbo.bestAsk);
-        
-        this.cleanOldData();
+        try {
+            const timestamp = Date.now();
+            const bbo = this.calculateBBO(orderbook);
+
+            this.chartData.bbo.push({
+                timestamp,
+                bestBid: bbo.bestBid,
+                bestAsk: bbo.bestAsk
+            });
+
+            // Update price range incrementally
+            this._updatePriceRange(bbo.bestBid, bbo.bestAsk);
+
+            this.cleanOldData();
+        } catch (error) {
+            console.error('Error in addBBOData:', error, orderbook);
+        }
     }
 
     // Add trade data point
     addTradeData(trade) {
-        const timestamp = Date.now();
-        this.chartData.trades.push({
-            timestamp,
-            price: trade.price,
-            volume: trade.volume,
-            buyer: trade.buyer,
-            seller: trade.seller,
-            buyerOrderId: trade.buyer_order_id,
-            sellerOrderId: trade.seller_order_id
-        });
-        
-        // Update price range incrementally
-        this._updatePriceRange(trade.price);
-        
-        this.cleanOldData();
+        try {
+            const timestamp = Date.now();
+            this.chartData.trades.push({
+                timestamp,
+                price: trade.price,
+                volume: trade.volume,
+                buyer: trade.buyer,
+                seller: trade.seller,
+                buyerOrderId: trade.buyer_order_id,
+                sellerOrderId: trade.seller_order_id
+            });
+
+            // Update price range incrementally
+            this._updatePriceRange(trade.price);
+
+            this.cleanOldData();
+        } catch (error) {
+            console.error('Error in addTradeData:', error, trade);
+        }
     }
 
     // Process orderbook update
     processOrderbookUpdate(data) {
-        this.orderbookCount++;
-        this.lastOrderbookData = data;
-        this.addBBOData(data);
+        try {
+            if (!data || typeof data !== 'object') {
+                console.warn('processOrderbookUpdate: Invalid orderbook data');
+                return;
+            }
+            this.orderbookCount++;
+            this.lastOrderbookData = data;
+            this.addBBOData(data);
+        } catch (error) {
+            console.error('Error in processOrderbookUpdate:', error, data);
+        }
     }
 
     // Process trade update
     processTradeUpdate(data) {
-        this.tradeCount++;
-        this.lastPrice = data.price;
-        this.addTradeData(data);
+        try {
+            if (!data || typeof data !== 'object') {
+                console.warn('processTradeUpdate: Invalid trade data');
+                return;
+            }
+            this.tradeCount++;
+            this.lastPrice = data.price;
+            this.addTradeData(data);
+        } catch (error) {
+            console.error('Error in processTradeUpdate:', error, data);
+        }
     }
 
     // Process message
     processMessage(message) {
         this.messageCount++;
-        
-        if (message.type === 'orderbook_update') {
-            this.processOrderbookUpdate(message.data);
-            return 'orderbook';
-        } else if (message.type === 'trade') {
-            this.processTradeUpdate(message.data);
-            return 'trade';
+
+        try {
+            if (!message || typeof message !== 'object') {
+                console.warn('processMessage: Invalid message format');
+                return null;
+            }
+
+            if (message.type === 'orderbook_update') {
+                this.processOrderbookUpdate(message.data);
+                return 'orderbook';
+            } else if (message.type === 'trade') {
+                this.processTradeUpdate(message.data);
+                return 'trade';
+            }
+        } catch (error) {
+            console.error('Error in processMessage:', error, message);
+            return null;
         }
-        
+
         return null;
     }
 
@@ -169,8 +224,13 @@ class DataManager {
 
     // Update price range incrementally (private method)
     _updatePriceRange(...prices) {
+        if (!Array.isArray(prices)) {
+            console.warn('_updatePriceRange: prices argument is not an array');
+            return;
+        }
+
         for (const price of prices) {
-            if (price !== null && price !== undefined) {
+            if (price !== null && price !== undefined && typeof price === 'number' && !isNaN(price)) {
                 if (this.priceRange.min === null || price < this.priceRange.min) {
                     this.priceRange.min = price;
                 }
@@ -199,20 +259,22 @@ class DataManager {
     _recalculatePriceRange() {
         this.priceRange.min = null;
         this.priceRange.max = null;
-        
+
         // Calculate from current data
         const allPrices = [];
         this.chartData.bbo.forEach(d => {
-            if (d.bestBid) allPrices.push(d.bestBid);
-            if (d.bestAsk) allPrices.push(d.bestAsk);
+            if (d.bestBid && typeof d.bestBid === 'number' && !isNaN(d.bestBid)) allPrices.push(d.bestBid);
+            if (d.bestAsk && typeof d.bestAsk === 'number' && !isNaN(d.bestAsk)) allPrices.push(d.bestAsk);
         });
-        this.chartData.trades.forEach(d => allPrices.push(d.price));
-        
+        this.chartData.trades.forEach(d => {
+            if (d.price && typeof d.price === 'number' && !isNaN(d.price)) allPrices.push(d.price);
+        });
+
         if (allPrices.length > 0) {
             this.priceRange.min = Math.min(...allPrices);
             this.priceRange.max = Math.max(...allPrices);
         }
-        
+
         this.priceRange.lastUpdated = this.messageCount;
     }
 }

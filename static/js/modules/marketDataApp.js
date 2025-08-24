@@ -86,6 +86,7 @@ class MarketDataApp {
             if (!this.uiManager.getPauseState()) {
                 try {
                     // Get fresh chart data from dataManager
+                    this.dataManager.cleanOldData();
                     const chartData = this.dataManager.getChartData();
                     const cachedPriceRange = this.dataManager.getCachedPriceRange();
 

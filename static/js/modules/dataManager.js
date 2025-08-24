@@ -39,7 +39,7 @@ class DataManager {
         this.last_n_trades_to_show = 10;
     }
 
-    // Clean old data (keep only last 5 minutes)
+    // Clean old data (keep only last n minutes)
     cleanOldData() {
         const cutoff = Date.now() - this.CHART_DURATION;
         this.chartData.bbo = this.chartData.bbo.filter(d => d.timestamp > cutoff);

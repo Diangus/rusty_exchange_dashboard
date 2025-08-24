@@ -35,7 +35,7 @@ class DataManager {
             trades: [] // [{timestamp, price, volume, buyer, seller, buyerOrderId, sellerOrderId}]
         };
         
-        this.CHART_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+        this.CHART_DURATION = 1 * 60 * 1000; // 1 minute in milliseconds
         this.last_n_trades_to_show = 10;
     }
 

@@ -90,7 +90,7 @@ class MarketDataApp {
                     const cachedPriceRange = this.dataManager.getCachedPriceRange();
 
                     // Update the live graph
-                    this.chartManager.updateChart(chartData, cachedPriceRange);
+                    this.chartManager.updateChart(chartData, cachedPriceRange, this.dataManager.CHART_DURATION);
                 } catch (error) {
                     console.error('Error updating live graph:', error);
                 }
@@ -157,7 +157,7 @@ class MarketDataApp {
         // Update chart with cached price range for better performance
         const chartData = this.dataManager.getChartData();
         const cachedPriceRange = this.dataManager.getCachedPriceRange();
-        this.chartManager.updateChart(chartData, cachedPriceRange);
+        this.chartManager.updateChart(chartData, cachedPriceRange, this.dataManager.CHART_DURATION);
     }
 
     refreshAllDisplays() {
@@ -177,7 +177,7 @@ class MarketDataApp {
         // Update chart with all accumulated data and cached price range
         const chartData = this.dataManager.getChartData();
         const cachedPriceRange = this.dataManager.getCachedPriceRange();
-        this.chartManager.updateChart(chartData, cachedPriceRange);
+        this.chartManager.updateChart(chartData, cachedPriceRange, this.dataManager.CHART_DURATION);
         
         // Update statistics display
         this.uiManager.updateStatistics(this.dataManager.getStatistics());
@@ -252,7 +252,7 @@ class MarketDataApp {
             console.log('📈 Resetting chart');
             // The chart manager doesn't have a reset method, but we can call updateChart with empty data
             const emptyChartData = { bbo: [], trades: [] };
-            this.chartManager.updateChart(emptyChartData, null);
+            this.chartManager.updateChart(emptyChartData, null, this.dataManager.CHART_DURATION);
         }
 
         // Reset statistics display

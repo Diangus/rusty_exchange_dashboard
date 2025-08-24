@@ -8,6 +8,10 @@ class ChartManager {
         this.containerId = containerId;
         this.chart = null;
         this.isInitialized = false;
+
+        // Configurable constants for trade dot sizing
+        this.MIN_DOT_SIZE = 2;  // Smallest dot radius in pixels
+        this.MAX_DOT_SIZE = 8;  // Largest dot radius in pixels
     }
 
     initializeChart() {
@@ -110,14 +114,14 @@ class ChartManager {
             .attr('class', 'trades');
     }
 
-    updateChart(chartData, cachedPriceRange = null) {
+    updateChart(chartData, cachedPriceRange = null, chartDuration = 5 * 60 * 1000) {
         if (!this.chart || !this.isInitialized || chartData.bbo.length === 0) return;
 
         const now = Date.now();
-        const fiveMinutesAgo = now - (5 * 60 * 1000);
+        const chartStartTime = now - chartDuration;
 
         // Update scales
-        this.chart.xScale.domain([fiveMinutesAgo, now]);
+        this.chart.xScale.domain([chartStartTime, now]);
 
         // Handle price range - if no data, use a default range
         let hasValidPriceRange = false;
@@ -251,15 +255,32 @@ class ChartManager {
     }
 
     _updateTradeDots(chartData) {
+        // Calculate volume range for sizing dots
+        const volumes = chartData.trades.map(d => d.volume);
+        let minVolume = d3.min(volumes) || 0;
+        let maxVolume = d3.max(volumes) || 1;
+
+        // Handle edge case where all volumes are the same
+        if (minVolume === maxVolume) {
+            minVolume = Math.max(0, minVolume - 1);
+            maxVolume = minVolume + 2;
+        }
+
+        // Create volume scale function
+        const volumeScale = d3.scaleLinear()
+            .domain([minVolume, maxVolume])
+            .range([this.MIN_DOT_SIZE, this.MAX_DOT_SIZE])
+            .clamp(true); // Ensure values stay within range
+
         // Update trade dots
         const trades = this.chart.tradesContainer.selectAll('.trade-dot')
             .data(chartData.trades, d => d.timestamp);
-        
+
         trades.exit().remove();
-        
+
         trades.enter().append('circle')
             .attr('class', 'trade-dot')
-            .attr('r', 4)
+            .attr('r', d => volumeScale(d.volume))
             .style('fill', '#fbbf24')
             .style('stroke', '#f59e0b')
             .style('stroke-width', 2)
@@ -268,7 +289,8 @@ class ChartManager {
             .on('mouseout', () => this._hideTooltip())
             .merge(trades)
             .attr('cx', d => this.chart.xScale(d.timestamp))
-            .attr('cy', d => this.chart.yScale(d.price));
+            .attr('cy', d => this.chart.yScale(d.price))
+            .attr('r', d => volumeScale(d.volume)); // Update radius for existing dots too
     }
 
     _showTooltip(event, d) {
@@ -278,7 +300,7 @@ class ChartManager {
         this.chart.tooltip.html(`
             <div><strong>Trade Details</strong></div>
             <div>Price: $${d.price.toFixed(2)}</div>
-            <div>Volume: ${d.volume}</div>
+            <div><strong>Volume: ${d.volume}</strong></div>
             <div>Buyer: ${d.buyer}</div>
             <div>Seller: ${d.seller}</div>
             <div>Buyer Order: ${d.buyerOrderId}</div>
@@ -293,6 +315,12 @@ class ChartManager {
         this.chart.tooltip.transition()
             .duration(500)
             .style('opacity', 0);
+    }
+
+    // Configure dot size constants
+    setDotSizeRange(minSize, maxSize) {
+        this.MIN_DOT_SIZE = Math.max(1, minSize); // Minimum 1px to ensure visibility
+        this.MAX_DOT_SIZE = Math.max(this.MIN_DOT_SIZE, maxSize);
     }
 
     // Clean up resources

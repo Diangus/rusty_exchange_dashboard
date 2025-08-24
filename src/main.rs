@@ -3,7 +3,9 @@ use actix_web::web::Bytes;
 use actix_web::web::Data;
 use actix_web::{web, App, HttpResponse, HttpServer, Result};
 use redis::Client as RedisClient;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
 use std::sync::Arc;
 use tera::Tera;
 use tokio::sync::broadcast;
@@ -12,51 +14,47 @@ mod sse;
 
 use sse::sse_handler;
 
-// StaticData structure to hold loaded Redis data
-#[derive(Debug, Clone)]
-struct StaticData {
-    instruments: HashMap<String, String>,    // name -> underlying
-    instrument_limits: HashMap<String, f64>, // name -> absolute limit
-    delta_limits: HashMap<String, f64>,      // underlying -> delta limit
+#[derive(Debug, Deserialize, Serialize)]
+struct Config {
+    redis_url: String,
+    server_host: String,
+    server_port: u16,
+    templates_path: String,
+    static_path: String,
+}
+
+// Load configuration from JSON file
+fn load_config() -> Result<Config, Box<dyn std::error::Error + Send + Sync>> {
+    let config_path = "config.json";
+    let config_content = std::fs::read_to_string(config_path)
+        .map_err(|e| format!("Failed to read config file '{}': {}", config_path, e))?;
+
+    let config: Config = serde_json::from_str(&config_content)
+        .map_err(|e| format!("Failed to parse config JSON: {}", e))?;
+
+    Ok(config)
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct InstrumentDetails {
+    name: String,
+    underlying: String,
+    absolute_limit: f64,
+    delta_limit: f64,
+    tick_size: f64,
+    max_order_size: f64,
 }
 
 // Load static data from Redis
 async fn load_static_data(
     redis_client: &RedisClient,
-) -> Result<StaticData, Box<dyn std::error::Error + Send + Sync>> {
-    let mut instruments = HashMap::new();
-    let mut instrument_limits = HashMap::new();
-    let mut delta_limits = HashMap::new();
+) -> Result<HashMap<String, InstrumentDetails>, Box<dyn std::error::Error + Send + Sync>> {
+    let mut instruments: HashMap<String, InstrumentDetails> = HashMap::new();
 
     let mut conn = redis_client.get_connection()?;
 
-    // Load instruments from Redis
-    let instruments_data_str: String = redis::cmd("GET")
-        .arg("static_data:instruments")
-        .query(&mut conn)?;
-
-    let instruments_data: Vec<serde_json::Value> = serde_json::from_str(&instruments_data_str)
-        .unwrap_or_else(|_| vec![]);
-
-    for instrument in instruments_data {
-        if let (Some(name), Some(underlying)) = (
-            instrument.get("name").and_then(|v| v.as_str()),
-            instrument.get("underlying").and_then(|v| v.as_str()),
-        ) {
-            instruments.insert(name.to_string(), underlying.to_string());
-
-            // Load absolute limit for this instrument
-            let limit_key = format!("static_data:{}:absolute_limit", name);
-            if let Ok(limit) = redis::cmd("GET")
-                .arg(&limit_key)
-                .query::<f64>(&mut conn)
-            {
-                instrument_limits.insert(name.to_string(), limit);
-            }
-        }
-    }
-
-    // Load delta limits from Redis
+    // First, load delta limits from underlyings
+    let mut delta_limits: HashMap<String, f64> = HashMap::new();
     let underlyings_data_str: String = redis::cmd("GET")
         .arg("static_data:underlyings")
         .query(&mut conn)?;
@@ -73,19 +71,52 @@ async fn load_static_data(
         }
     }
 
-    Ok(StaticData {
-        instruments,
-        instrument_limits,
-        delta_limits,
-    })
+    // Load instruments from Redis
+    let instruments_data_str: String = redis::cmd("GET")
+        .arg("static_data:instruments")
+        .query(&mut conn)?;
+
+    let instruments_data: Vec<serde_json::Value> = serde_json::from_str(&instruments_data_str)
+        .unwrap_or_else(|_| vec![]);
+
+    for instrument in instruments_data {
+        if let (Some(name), Some(underlying), Some(tick_size)) = (
+            instrument.get("name").and_then(|v| v.as_str()),
+            instrument.get("underlying").and_then(|v| v.as_str()),
+            instrument.get("tick_size").and_then(|v| v.as_f64()),
+        ) {
+            // Load absolute limit for this instrument
+            let limit_key = format!("static_data:{}:absolute_limit", name);
+            let absolute_limit = redis::cmd("GET")
+                .arg(&limit_key)
+                .query::<f64>(&mut conn)
+                .unwrap_or(1000.0); // Default value if not found
+
+            // Get delta limit for the underlying, or use default
+            let delta_limit = delta_limits.get(underlying).copied().unwrap_or(20.0);
+            let max_order_size = 10000.0; // Default max order size
+
+            let instrument_details = InstrumentDetails {
+                name: name.to_string(),
+                underlying: underlying.to_string(),
+                absolute_limit,
+                delta_limit,
+                tick_size,
+                max_order_size,
+            };
+
+            instruments.insert(name.to_string(), instrument_details);
+        }
+    }
+
+    Ok(instruments)
 }
 
 // Create instrument-specific broadcast channels
 fn create_instrument_channels(
-    static_data: &StaticData,
+    instruments: &HashMap<String, InstrumentDetails>,
 ) -> HashMap<String, broadcast::Sender<Arc<Bytes>>> {
-    static_data
-        .instruments
+    instruments
         .keys()
         .map(|instrument_name| {
             // Fan-out bus (size tunes how many messages slow clients may miss before 'Lagged')
@@ -172,20 +203,23 @@ async fn get_instruments(app_state: web::Data<AppState>) -> Result<impl actix_we
 async fn main() -> std::io::Result<()> {
     println!("Starting Rusty Exchange Dashboard...");
 
+    // Load configuration
+    let config = load_config().expect("Failed to load configuration");
+
     // Initialize Redis client
-    let redis_client =
-        RedisClient::open("redis://127.0.0.1/").expect("Failed to create Redis client");
+    let redis_client = RedisClient::open(config.redis_url)
+        .expect("Failed to create Redis client");
 
     // Load static data from Redis
-    let static_data = load_static_data(&redis_client)
+    let instruments = load_static_data(&redis_client)
         .await
         .expect("Failed to load static data");
 
     // Create instrument-specific broadcast channels
-    let instrument_tx = create_instrument_channels(&static_data);
+    let instrument_tx = create_instrument_channels(&instruments);
 
     // Initialize Tera template engine
-    let tera = match Tera::new("templates/**/*") {
+    let tera = match Tera::new(&format!("{}**/*", config.templates_path)) {
         Ok(t) => t,
         Err(e) => {
             println!("Template parsing error: {}", e);
@@ -193,27 +227,33 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
+    // Create simplified instruments mapping for backward compatibility
+    let instruments_mapping: HashMap<String, String> = instruments
+        .iter()
+        .map(|(name, details)| (name.clone(), details.underlying.clone()))
+        .collect();
+
     // Create enhanced AppState
     let app_state = AppState {
         redis_client: Arc::new(redis_client.clone()),
         tera: Arc::new(tera),
-        instruments: static_data.instruments,
-        instrument_limits: static_data.instrument_limits,
-        delta_limits: static_data.delta_limits,
+        instruments: instruments_mapping,
+        instrument_details: instruments,
         instrument_tx: instrument_tx.clone(),
     };
 
     // Spawn Redis pump task
     tokio::spawn(redis_pump(redis_client, instrument_tx));
 
-    println!("Server starting on http://127.0.0.1:8080");
+    let server_address = format!("{}:{}", config.server_host, config.server_port);
+    println!("Server starting on http://{}", server_address);
     println!("Loaded {} instruments", app_state.instruments.len());
 
     HttpServer::new(move || {
         App::new()
             .app_data(Data::new(app_state.clone()))
             // Serve static files from the static directory
-            .service(fs::Files::new("/static", "static/").show_files_listing())
+            .service(fs::Files::new("/static", &config.static_path).show_files_listing())
             // Main routes
             .route("/", web::get().to(index))
             .route("/dashboard", web::get().to(dashboard))
@@ -221,7 +261,7 @@ async fn main() -> std::io::Result<()> {
             .route("/sse/{instrument}", web::get().to(sse_handler))
     })
     .workers(num_cpus::get().max(4))
-    .bind("127.0.0.1:8080")?
+    .bind(&server_address)?
     .run()
     .await
 }
@@ -260,10 +300,9 @@ async fn dashboard(app_state: web::Data<AppState>) -> Result<actix_web::HttpResp
 pub struct AppState {
     pub redis_client: Arc<RedisClient>,
     pub tera: Arc<Tera>,
-    // New fields from Example_preprocess
-    pub instruments: HashMap<String, String>, // instrument -> underlying
-    pub instrument_limits: HashMap<String, f64>, // instrument -> absolute limit
-    pub delta_limits: HashMap<String, f64>,   // underlying -> delta limit
+    // Instrument data
+    pub instruments: HashMap<String, String>, // instrument -> underlying (for backward compatibility)
+    pub instrument_details: HashMap<String, InstrumentDetails>, // instrument -> full details
     pub instrument_tx: HashMap<String, broadcast::Sender<Arc<Bytes>>>, // instrument -> SSE channel
 }
 
@@ -274,46 +313,63 @@ mod tests {
     use tokio::sync::broadcast;
 
     #[test]
-    fn test_static_data_creation() {
+    fn test_instrument_details_creation() {
         let mut instruments = HashMap::new();
-        instruments.insert("AAPL".to_string(), "EQUITY".to_string());
-        instruments.insert("GOOGL".to_string(), "EQUITY".to_string());
 
-        let mut instrument_limits = HashMap::new();
-        instrument_limits.insert("AAPL".to_string(), 1000.0);
-        instrument_limits.insert("GOOGL".to_string(), 2000.0);
-
-        let mut delta_limits = HashMap::new();
-        delta_limits.insert("EQUITY".to_string(), 50000.0);
-
-        let static_data = StaticData {
-            instruments,
-            instrument_limits,
-            delta_limits,
+        let aapl_details = InstrumentDetails {
+            name: "AAPL".to_string(),
+            underlying: "EQUITY".to_string(),
+            absolute_limit: 1000.0,
+            delta_limit: 50000.0,
+            tick_size: 0.01,
+            max_order_size: 10000.0,
         };
 
-        assert_eq!(static_data.instruments.len(), 2);
-        assert_eq!(
-            static_data.instruments.get("AAPL"),
-            Some(&"EQUITY".to_string())
-        );
-        assert_eq!(static_data.instrument_limits.get("AAPL"), Some(&1000.0));
-        assert_eq!(static_data.delta_limits.get("EQUITY"), Some(&50000.0));
+        let googl_details = InstrumentDetails {
+            name: "GOOGL".to_string(),
+            underlying: "EQUITY".to_string(),
+            absolute_limit: 2000.0,
+            delta_limit: 50000.0,
+            tick_size: 0.01,
+            max_order_size: 10000.0,
+        };
+
+        instruments.insert("AAPL".to_string(), aapl_details);
+        instruments.insert("GOOGL".to_string(), googl_details);
+
+        assert_eq!(instruments.len(), 2);
+        assert_eq!(instruments.get("AAPL").unwrap().name, "AAPL");
+        assert_eq!(instruments.get("AAPL").unwrap().underlying, "EQUITY");
+        assert_eq!(instruments.get("AAPL").unwrap().absolute_limit, 1000.0);
+        assert_eq!(instruments.get("AAPL").unwrap().delta_limit, 50000.0);
     }
 
     #[test]
     fn test_create_instrument_channels() {
         let mut instruments = HashMap::new();
-        instruments.insert("AAPL".to_string(), "EQUITY".to_string());
-        instruments.insert("GOOGL".to_string(), "EQUITY".to_string());
 
-        let static_data = StaticData {
-            instruments,
-            instrument_limits: HashMap::new(),
-            delta_limits: HashMap::new(),
+        let aapl_details = InstrumentDetails {
+            name: "AAPL".to_string(),
+            underlying: "EQUITY".to_string(),
+            absolute_limit: 1000.0,
+            delta_limit: 50000.0,
+            tick_size: 0.01,
+            max_order_size: 10000.0,
         };
 
-        let channels = create_instrument_channels(&static_data);
+        let googl_details = InstrumentDetails {
+            name: "GOOGL".to_string(),
+            underlying: "EQUITY".to_string(),
+            absolute_limit: 2000.0,
+            delta_limit: 50000.0,
+            tick_size: 0.01,
+            max_order_size: 10000.0,
+        };
+
+        instruments.insert("AAPL".to_string(), aapl_details);
+        instruments.insert("GOOGL".to_string(), googl_details);
+
+        let channels = create_instrument_channels(&instruments);
 
         assert_eq!(channels.len(), 2);
         assert!(channels.contains_key("AAPL"));

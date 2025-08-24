@@ -63,9 +63,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             const selectedInstrument = instrumentSelect.value;
             if (!selectedInstrument) return;
 
+            // Update button text to show current action
+            goButton.innerHTML = '<span>Connecting...</span>';
+
             // Disconnect existing SSE connection
             if (currentEventSource) {
+                console.log(`🔌 Disconnecting from previous instrument...`);
                 currentEventSource.close();
+                currentEventSource = null;
+            }
+
+            // Clear existing market data app
+            if (window.marketDataApp) {
+                console.log(`🧹 Clearing existing market data...`);
+                // Reset the app state if it has a reset method
+                if (typeof window.marketDataApp.reset === 'function') {
+                    window.marketDataApp.reset();
+                }
             }
 
             // Update page title
@@ -82,14 +96,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 marketDataContainer.style.display = 'block';
             }
 
-            // Hide instrument selector
-            const instrumentSelector = document.querySelector('.instrument-selector');
-            if (instrumentSelector) {
-                instrumentSelector.style.display = 'none';
-            }
-
             // Connect to instrument-specific SSE endpoint
             connectToSSE(selectedInstrument);
+
+            // Reset button text after a short delay
+            setTimeout(() => {
+                goButton.innerHTML = `
+                    <span>Go</span>
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                `;
+            }, 1000);
         });
 
         function connectToSSE(instrument) {
@@ -105,14 +123,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const data = JSON.parse(event.data);
                     console.log('📡 Received SSE data:', data);
 
-                    // Initialize or update the market data app with the new data
+                    // Initialize or reinitialize the market data app with the new data
                     if (!window.marketDataApp) {
+                        console.log('🚀 Initializing market data app...');
                         window.marketDataApp = new MarketDataApp();
                         window.marketDataApp.initialize().then(() => {
                             window.marketDataApp.handleMarketData(data);
                         });
                     } else {
-                        window.marketDataApp.handleMarketData(data);
+                        // Reinitialize the app for new instrument
+                        console.log('🔄 Reinitializing market data app for new instrument...');
+                        window.marketDataApp.initialize().then(() => {
+                            window.marketDataApp.handleMarketData(data);
+                        });
                     }
                 } catch (error) {
                     console.error('Failed to parse SSE data:', error);

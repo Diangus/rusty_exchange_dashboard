@@ -1,0 +1,7 @@
+{
+  "redis_url": "redis://redis:6379/",
+  "server_host": "0.0.0.0",
+  "server_port": 8082,
+  "templates_path": "templates/",
+  "static_path": "static/"
+}

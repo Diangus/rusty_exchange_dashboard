@@ -1,4 +1,4 @@
-# Rusty Exchange Dashboard - Implementation Plan
+# Exchange Dashboard - Implementation Plan
 
 ## Overview
 
@@ -258,7 +258,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Update page title
-        pageTitle.textContent = `Rusty Exchange Dashboard - ${selectedInstrument}`;
+        pageTitle.textContent = `Exchange Dashboard - ${selectedInstrument}`;
         
         // Show market data container
         marketDataContainer.style.display = 'block';

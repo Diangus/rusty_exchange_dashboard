@@ -216,7 +216,7 @@ async fn get_instruments(app_state: web::Data<AppState>) -> Result<impl actix_we
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    println!("Starting Rusty Exchange Dashboard...");
+    println!("Starting Exchange Dashboard...");
 
     // Load configuration
     let config = load_config().expect("Failed to load configuration");
@@ -268,6 +268,7 @@ async fn main() -> std::io::Result<()> {
             // Main routes
             .route("/", web::get().to(index))
             .route("/dashboard", web::get().to(dashboard))
+            .route("/pnl", web::get().to(pnl))
             .route("/api/instruments", web::get().to(get_instruments))
             // SSE routes - specific routes must come before generic ones
             .route("/sse/pnl", web::get().to(pnl_sse_handler))
@@ -333,6 +334,38 @@ async fn dashboard(app_state: web::Data<AppState>) -> Result<actix_web::HttpResp
     ctx.insert("instruments", &instruments);
 
     match app_state.tera.render("dashboard.html", &ctx) {
+        Ok(content) => Ok(actix_web::HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(content)),
+        Err(e) => {
+            println!("Template render error: {}", e);
+            Ok(actix_web::HttpResponse::InternalServerError().body("Failed to render template"))
+        }
+    }
+}
+
+async fn pnl(app_state: web::Data<AppState>) -> Result<actix_web::HttpResponse> {
+    let mut ctx = tera::Context::new();
+
+    // Convert instrument details to a format suitable for Tera templates
+    let instruments: Vec<serde_json::Value> = app_state
+        .instrument_details
+        .iter()
+        .map(|(_name, details)| {
+            serde_json::json!({
+                "name": details.name,
+                "underlying": details.underlying,
+                "absolute_limit": details.absolute_limit,
+                "delta_limit": details.delta_limit,
+                "tick_size": details.tick_size,
+                "max_order_size": details.max_order_size
+            })
+        })
+        .collect();
+
+    ctx.insert("instruments", &instruments);
+
+    match app_state.tera.render("pnl.html", &ctx) {
         Ok(content) => Ok(actix_web::HttpResponse::Ok()
             .content_type("text/html; charset=utf-8")
             .body(content)),

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}PNL Dashboard{% endblock %}
+
+{% block extra_head %}{% endblock %}
+
+{% block content %}
+<div class="header mb-8">
+    <!-- Page Title -->
+    <div class="page-title mb-8">
+        <h1 class="text-3xl font-bold text-slate-100 mb-2">PNL Dashboard</h1>
+        <p class="text-slate-400">Real-time position and P&L monitoring</p>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="stats bg-slate-800 rounded-lg shadow-xl border border-slate-700 p-6 mb-8" id="pnl-stats">
+    <h2 class="text-xl font-semibold text-slate-200 mb-4">Statistics</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="text-center">
+            <div class="text-2xl font-bold text-blue-400" id="totalClients">0</div>
+            <div class="text-sm text-slate-400">Total Clients</div>
+        </div>
+        <div class="text-center">
+            <div class="text-2xl font-bold text-emerald-400" id="activePositions">0</div>
+            <div class="text-sm text-slate-400">Active Positions</div>
+        </div>
+        <div class="text-center">
+            <div class="text-2xl font-bold text-violet-400" id="totalPnl">0.00</div>
+            <div class="text-sm text-slate-400">Total P&L</div>
+        </div>
+        <div class="text-center">
+            <div class="text-2xl font-bold text-amber-400" id="pnlUpdates">0</div>
+            <div class="text-sm text-slate-400">P&L Updates</div>
+        </div>
+    </div>
+</div>
+
+<!-- Positions Table -->
+<div class="bg-slate-800 rounded-lg shadow-xl border border-slate-700 p-6 mb-8">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-slate-200">Current Positions</h2>
+        <div class="flex space-x-2">
+            <input type="text" id="position-filter" placeholder="Filter positions..."
+                class="bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <select id="position-sort"
+                class="bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="trader">Sort by Trader</option>
+                <option value="instrument">Sort by Instrument</option>
+                <option value="position">Sort by Position</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="w-full divide-y divide-slate-600" id="positions-table">
+            <thead class="bg-slate-700">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider cursor-pointer hover:bg-slate-600"
+                        data-sort="trader">
+                        Trader
+                    </th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider cursor-pointer hover:bg-slate-600"
+                        data-sort="instrument">
+                        Instrument
+                    </th>
+                    <th class="px-4 py-3 text-right text-xs font-medium text-slate-300 uppercase tracking-wider cursor-pointer hover:bg-slate-600"
+                        data-sort="position">
+                        Position
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="bg-slate-800 divide-y divide-slate-700" id="positions-tbody">
+                <!-- Positions will be populated by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- PNL Chart Legend -->
+<div class="bg-slate-800 rounded-lg shadow-xl border border-slate-700 p-6 mb-8">
+    <h2 class="text-xl font-semibold text-slate-200 mb-4">Active Traders Legend</h2>
+    <div id="pnl-legend" class="flex flex-wrap gap-4">
+        <!-- Legend items will be populated by JavaScript -->
+    </div>
+</div>
+
+<!-- PNL Chart -->
+<div class="bg-slate-800 rounded-lg shadow-xl border border-slate-700 p-6">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-slate-200">P&L Over Time</h2>
+        <div class="flex items-center space-x-2">
+            <label class="text-sm text-slate-400">Duration:</label>
+            <select id="chart-duration"
+                class="bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="1">1 minute</option>
+                <option value="5" selected>5 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+            </select>
+        </div>
+    </div>
+    <div id="pnl-chart" class="w-full" style="height: 400px;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- PNL Application - ES6 Module Entry Point -->
+<script type="module" src="/static/js/pnl-main.js"></script>
+{% endblock %}

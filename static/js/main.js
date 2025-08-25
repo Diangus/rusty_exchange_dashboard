@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Update page title
             if (pageTitle) {
-                pageTitle.textContent = `Rusty Exchange Dashboard - ${selectedInstrument}`;
+                pageTitle.textContent = `Exchange Dashboard - ${selectedInstrument}`;
             }
 
             // Show page title and market data container

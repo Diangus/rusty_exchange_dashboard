@@ -135,15 +135,8 @@ class PnlDashboardApp {
         };
 
         this.eventSource.onmessage = (event) => {
-            // Only log occasionally to avoid spam
-            if (Math.random() < 0.01) { // Log ~1% of messages
-                console.log('Raw SSE event data:', event.data);
-            }
             try {
                 const message = JSON.parse(event.data);
-                if (Math.random() < 0.01) { // Log ~1% of messages
-                    console.log('Parsed SSE message:', message);
-                }
                 this._handleMessage(message);
             } catch (error) {
                 console.error('Error parsing SSE message:', error, event.data);
@@ -163,22 +156,15 @@ class PnlDashboardApp {
     }
 
     _handleMessage(message) {
-        console.log('📨 _handleMessage: Processing message:', message);
-
         const messageType = this.dataManager.processMessage(message);
-        console.log('📨 _handleMessage: Message type returned:', messageType);
 
         if (messageType === 'position') {
-            console.log('📨 _handleMessage: Processing position update - calling _updatePositionsTable');
             this._updatePositionsTable();
             this._updateStatistics();
         } else if (messageType === 'pnl') {
-            console.log('📨 _handleMessage: Processing pnl update - calling _updateStatistics, _updateChart, _updatePnlUpdatesTable');
             this._updateStatistics();
             this._updateChart();
             this._updatePnlUpdatesTable();
-        } else {
-            console.log('📨 _handleMessage: Unknown message type:', messageType);
         }
     }
 
@@ -197,31 +183,24 @@ class PnlDashboardApp {
     }
 
     _updatePositionsTable() {
-        console.log('📊 _updatePositionsTable: Called');
-
         if (!this.positionsTable) {
-            console.log('📊 _updatePositionsTable: No positionsTable element found');
             return;
         }
 
         let positions = this.dataManager.getCurrentPositions();
-        console.log('📊 _updatePositionsTable: Raw positions from dataManager:', positions);
 
         // Apply filter
         if (this.currentFilter) {
             positions = this.dataManager.filterPositions(this.currentFilter);
-            console.log('📊 _updatePositionsTable: Filtered positions:', positions);
         }
 
         // Apply sort
         positions = this.dataManager.sortPositions(positions, this.currentSortBy);
-        console.log('📊 _updatePositionsTable: Sorted positions:', positions);
 
         // Update table
         this.positionsTable.innerHTML = '';
 
         if (positions.length === 0) {
-            console.log('📊 _updatePositionsTable: No positions to display');
             const emptyRow = document.createElement('tr');
             emptyRow.innerHTML = `
                 <td colspan="3" class="px-4 py-3 text-sm text-slate-500 text-center">
@@ -231,7 +210,6 @@ class PnlDashboardApp {
             this.positionsTable.appendChild(emptyRow);
         } else {
             positions.forEach(position => {
-                console.log('📊 _updatePositionsTable: Adding row for position:', position);
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td class="px-4 py-3 text-sm text-slate-300">${position.trader}</td>
@@ -241,8 +219,6 @@ class PnlDashboardApp {
                 this.positionsTable.appendChild(row);
             });
         }
-
-        console.log('📊 _updatePositionsTable: Table updated with', positions.length, 'rows');
     }
 
     _updateStatistics() {
@@ -257,44 +233,24 @@ class PnlDashboardApp {
     }
 
     _updateChart() {
-        console.log('📈 _updateChart: Called');
-
         const pnlHistory = this.dataManager.getPnlHistory();
         const traders = this.dataManager.getUniqueTraders();
         const duration = this.chartDuration ? parseInt(this.chartDuration.value) * 60 * 1000 : null;
 
-        console.log('📈 _updateChart: PNL history:', pnlHistory);
-        console.log('📈 _updateChart: Traders:', traders);
-        console.log('📈 _updateChart: Duration:', duration);
-
-        if (pnlHistory.length === 0) {
-            console.log('📈 _updateChart: No PNL history data available');
-        }
-
-        if (traders.length === 0) {
-            console.log('📈 _updateChart: No traders available');
-        }
-
         this.chartManager.updateChart(pnlHistory, traders, duration);
-        console.log('📈 _updateChart: Chart update complete');
     }
 
     _updatePnlUpdatesTable() {
-        console.log('📋 _updatePnlUpdatesTable: Called');
-
         if (!this.pnlUpdatesTable) {
-            console.log('📋 _updatePnlUpdatesTable: No pnlUpdatesTable element found');
             return;
         }
 
         const recentPnls = this.dataManager.getRecentPnls();
-        console.log('📋 _updatePnlUpdatesTable: Recent PNLs:', recentPnls);
 
         // Update table
         this.pnlUpdatesTable.innerHTML = '';
 
         if (recentPnls.length === 0) {
-            console.log('📋 _updatePnlUpdatesTable: No recent PNLs to display');
             const emptyRow = document.createElement('tr');
             emptyRow.innerHTML = `
                 <td colspan="2" class="px-4 py-3 text-sm text-slate-500 text-center">
@@ -304,7 +260,6 @@ class PnlDashboardApp {
             this.pnlUpdatesTable.appendChild(emptyRow);
         } else {
             recentPnls.forEach(pnlData => {
-                console.log('📋 _updatePnlUpdatesTable: Adding row for PNL:', pnlData);
                 const row = document.createElement('tr');
                 const pnlClass = pnlData.pnl >= 0 ? 'text-emerald-400' : 'text-red-400';
                 const pnlSign = pnlData.pnl >= 0 ? '+' : '';
@@ -316,8 +271,6 @@ class PnlDashboardApp {
                 this.pnlUpdatesTable.appendChild(row);
             });
         }
-
-        console.log('📋 _updatePnlUpdatesTable: Table updated with', recentPnls.length, 'rows');
     }
 
     // Clean up resources

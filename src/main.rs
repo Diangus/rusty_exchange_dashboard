@@ -12,7 +12,7 @@ use tokio::sync::broadcast;
 
 mod sse;
 
-use sse::sse_handler;
+use sse::{sse_handler, pnl_sse_handler};
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Config {
@@ -127,10 +127,18 @@ fn create_instrument_channels(
         .collect()
 }
 
+// Create single broadcast channel for all position/PnL updates
+fn create_pnl_channel() -> broadcast::Sender<Arc<Bytes>> {
+    // Fan-out bus (size tunes how many messages slow clients may miss before 'Lagged')
+    let (tx, _rx) = broadcast::channel::<Arc<Bytes>>(1024);
+    tx
+}
+
 // Redis pump function for pub/sub message processing
 async fn redis_pump(
     redis_client: RedisClient,
     instrument_tx: HashMap<String, broadcast::Sender<Arc<Bytes>>>,
+    pnl_tx: broadcast::Sender<Arc<Bytes>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut conn = redis_client.get_connection()?;
 
@@ -142,25 +150,38 @@ async fn redis_pump(
             Ok(msg) => {
                 if let Ok(payload) = msg.get_payload::<String>() {
                     if let Ok(json_data) = serde_json::from_str::<serde_json::Value>(&payload) {
-                        // Extract instrument field from message
+                        // Extract message type from message
                         if let Some(msg_type) = json_data.get("type").and_then(|v| v.as_str()) {
-                            // Skip any messages that are not orderbook_update, bbo_update or trade
-                            if msg_type != "orderbook_update" && msg_type != "bbo_update" && msg_type != "trade" {
-                                continue;
+                            match msg_type {
+                                // Handle instrument-specific messages (existing logic)
+                                "orderbook_update" | "bbo_update" | "trade" => {
+                                    if let Some(instrument_name) = json_data.get("instrument").and_then(|v| v.as_str()) {
+                                        // Route message to appropriate instrument channel
+                                        if let Some(tx) = instrument_tx.get(instrument_name) {
+                                            let json_str = serde_json::to_string(&json_data)?;
+                                            let sse_message = format!("data: {}\n\n", json_str);
+                                            let bytes = Arc::new(Bytes::from(sse_message.into_bytes()));
+                                            let _ = tx.send(bytes); // ignore if no listeners
+                                        } else {
+                                            println!("Warning: Received message for unknown instrument: {}", instrument_name);
+                                        }
+                                    } else {
+                                        println!("Warning: Received {} message without instrument field: {}", msg_type, payload);
+                                    }
+                                }
+                                // Handle position and PnL updates (single channel for all clients)
+                                "position_update" | "pnl_update" => {
+                                    let json_str = serde_json::to_string(&json_data)?;
+                                    let sse_message = format!("data: {}\n\n", json_str);
+                                    let bytes = Arc::new(Bytes::from(sse_message.into_bytes()));
+                                    let _ = pnl_tx.send(bytes); // ignore if no listeners
+                                }
+                                // Ignore other message types
+                                _ => {
+                                    // Skip unknown message types
+                                    continue;
+                                }
                             }
-                        }
-                        if let Some(instrument_name) = json_data.get("instrument").and_then(|v| v.as_str()) {
-                            // Route message to appropriate instrument channel
-                            if let Some(tx) = instrument_tx.get(instrument_name) {
-                                let json_str = serde_json::to_string(&json_data)?;
-                                let sse_message = format!("data: {}\n\n", json_str);
-                                let bytes = Arc::new(Bytes::from(sse_message.into_bytes()));
-                                let _ = tx.send(bytes); // ignore if no listeners
-                            } else {
-                                println!("Warning: Received message for unknown instrument: {}", instrument_name);
-                            }
-                        } else {
-                            println!("Warning: Received market_data message without instrument field: {}", payload);
                         }
                     } else {
                         println!("Warning: Failed to parse market_data message as JSON: {}", payload);
@@ -212,6 +233,9 @@ async fn main() -> std::io::Result<()> {
     // Create instrument-specific broadcast channels
     let instrument_tx = create_instrument_channels(&instruments);
 
+    // Create single broadcast channel for all position/PnL updates
+    let pnl_tx = create_pnl_channel();
+
     // Initialize Tera template engine
     let tera = match Tera::new(&format!("{}**/*", config.templates_path)) {
         Ok(t) => t,
@@ -226,10 +250,11 @@ async fn main() -> std::io::Result<()> {
         tera: Arc::new(tera),
         instrument_details: instruments,
         instrument_tx: instrument_tx.clone(),
+        pnl_tx: pnl_tx.clone(),
     };
 
     // Spawn Redis pump task
-    tokio::spawn(redis_pump(redis_client, instrument_tx));
+    tokio::spawn(redis_pump(redis_client, instrument_tx, pnl_tx));
 
     let server_address = format!("{}:{}", config.server_host, config.server_port);
     println!("Server starting on http://{}", server_address);
@@ -244,6 +269,8 @@ async fn main() -> std::io::Result<()> {
             .route("/", web::get().to(index))
             .route("/dashboard", web::get().to(dashboard))
             .route("/api/instruments", web::get().to(get_instruments))
+            // SSE routes - specific routes must come before generic ones
+            .route("/sse/pnl", web::get().to(pnl_sse_handler))
             .route("/sse/{instrument}", web::get().to(sse_handler))
     })
     .workers(num_cpus::get().max(4))
@@ -322,6 +349,7 @@ pub struct AppState {
     pub tera: Arc<Tera>,
     pub instrument_details: HashMap<String, InstrumentDetails>, // instrument -> full details
     pub instrument_tx: HashMap<String, broadcast::Sender<Arc<Bytes>>>, // instrument -> SSE channel
+    pub pnl_tx: broadcast::Sender<Arc<Bytes>>, // single channel for all position/PnL updates
 }
 
 #[cfg(test)]

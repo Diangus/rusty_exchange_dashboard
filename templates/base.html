@@ -1,17 +1,19 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-    <title>{% block title %}Rusty Exchange Dashboard{% endblock %}</title>
+    <title>{% block title %}Exchange Dashboard{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link rel="stylesheet" href="/static/css/style.css">
     {% block extra_head %}{% endblock %}
 </head>
+
 <body class="bg-slate-900 min-h-screen">
     {% include "navigation.html" %}
 
     <!-- Main Content -->
-    <div class="ml-16 container mx-auto px-4 py-8 max-w-7xl">
+    <div class="pt-24 container mx-auto px-4 py-8 max-w-[90%]">
         {% block content %}{% endblock %}
     </div>
 
@@ -28,4 +30,5 @@
         console.warn('ES6 modules not supported. Please update your browser.');
     </script>
 </body>
+
 </html>

@@ -16,6 +16,7 @@ class PnlDataManager {
         this.pnlHistory = new Map();
 
         this.CHART_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
+        this.last_n_positions_to_show = 50;
 
         // Statistics cache
         this.cachedStatistics = null;
@@ -25,59 +26,66 @@ class PnlDataManager {
     // Clean old PNL data (keep only last N minutes)
     cleanOldData() {
         const cutoff = Date.now() - this.CHART_DURATION;
+        console.log('🧹 cleanOldData: Called, cutoff timestamp:', cutoff, 'Date:', new Date(cutoff));
+
         for (const [trader, pnl] of this.pnlHistory.entries()) {
-            const filteredPnl = pnl.filter(d => d.timestamp > cutoff);
+            console.log('🧹 cleanOldData: Processing trader:', trader, 'data length before:', pnl.length);
+            if (pnl.length > 0) {
+                console.log('🧹 cleanOldData: First entry timestamp:', pnl[0].timestamp, 'type:', typeof pnl[0].timestamp);
+                console.log('🧹 cleanOldData: First entry parsed as Date:', new Date(pnl[0].timestamp));
+                console.log('🧹 cleanOldData: First entry as milliseconds:', Date.parse(pnl[0].timestamp));
+            }
+
+            const filteredPnl = pnl.filter(d => {
+                const entryTime = Date.parse(d.timestamp);
+                const shouldKeep = entryTime > cutoff;
+                console.log('🧹 cleanOldData: Entry timestamp:', d.timestamp, 'parsed:', entryTime, 'cutoff:', cutoff, 'keep:', shouldKeep);
+                return shouldKeep;
+            });
+
+            console.log('🧹 cleanOldData: Filtered data length after:', filteredPnl.length);
             this.pnlHistory.set(trader, filteredPnl);
         }
+        console.log('🧹 cleanOldData: Complete');
     }
 
     // Process position update
     processPositionUpdate(message) {
         try {
+            console.log('🎯 processPositionUpdate: Received message:', message);
+
             if (!message || typeof message !== 'object') {
-                console.warn('processPositionUpdate: Invalid message format');
-                return;
-            }
-
-            const trader = message.client;
-            const positionData = message.data;
-            const timestamp = message.timestamp;
-
-            if (!trader) {
-                console.warn('processPositionUpdate: Missing client field', message);
-                return;
-            }
-
-            if (!positionData || typeof positionData !== 'object') {
-                console.warn('processPositionUpdate: Missing or invalid data field', message);
+                console.warn('processPositionUpdate: Invalid message');
                 return;
             }
 
             this.positionUpdateCount++;
 
-            // For position updates, the data field contains instrument:position pairs
-            // We'll store each instrument position separately for now
-            // Since we need a table format, let's pick the first instrument or show summary
-            const instruments = Object.keys(positionData);
-            if (instruments.length > 0) {
-                const firstInstrument = instruments[0];
-                const firstPosition = positionData[firstInstrument];
+            // The message structure is: { type: "position_update", client: "TRADER", data: {"AAPL": -19}, timestamp: "..." }
+            // According to redis_keys_and_channels.md
+            const trader = message.client;
+            const positionData = message.data;
 
-                this.currentPositions.set(trader, {
-                    trader: trader,
-                    instrument: firstInstrument,
-                    position: typeof firstPosition === 'number' ? firstPosition : 0,
-                    timestamp: timestamp ? new Date(timestamp).getTime() : Date.now()
-                });
-            } else {
-                // If no instruments, create a placeholder entry
-                this.currentPositions.set(trader, {
-                    trader: trader,
-                    instrument: 'UNKNOWN',
-                    position: 0,
-                    timestamp: timestamp ? new Date(timestamp).getTime() : Date.now()
-                });
+            console.log('🎯 processPositionUpdate: trader:', trader, 'positionData:', positionData);
+
+            if (!trader || !positionData) {
+                console.warn('processPositionUpdate: Missing trader or position data', message);
+                return;
             }
+
+            // Handle the position data structure: { "AAPL": -19, "GOOGL": 100 }
+            for (const [instrument, position] of Object.entries(positionData)) {
+                console.log('🎯 processPositionUpdate: Processing instrument:', instrument, 'position:', position);
+
+                let positionsForTrader = this.currentPositions.get(trader);
+                if (!positionsForTrader) {
+                    positionsForTrader = new Map();
+                    this.currentPositions.set(trader, positionsForTrader);
+                }
+                positionsForTrader.set(instrument, position);
+            }
+
+            console.log('🎯 processPositionUpdate: Current positions after update:', this.currentPositions);
 
         } catch (error) {
             console.error('Error in processPositionUpdate:', error, message);
@@ -87,60 +95,44 @@ class PnlDataManager {
     // Process PNL update
     processPnlUpdate(message) {
         try {
-            console.log('processPnlUpdate received:', message);
+            console.log('💰 processPnlUpdate: Received message:', message);
 
             if (!message || typeof message !== 'object') {
-                console.warn('processPnlUpdate: Invalid message format');
-                return;
-            }
-
-            const trader = message.client;
-            const pnlData = message.data;
-            const timestamp = message.timestamp;
-
-            console.log('Extracted values:', { trader, pnlData, timestamp });
-
-            if (!trader) {
-                console.warn('processPnlUpdate: Missing client field', message);
-                return;
-            }
-
-            if (!pnlData || typeof pnlData !== 'object') {
-                console.warn('processPnlUpdate: Missing or invalid data field', message);
-                return;
-            }
-
-            const pnlValue = pnlData.pnl;
-
-            console.log('PNL value:', pnlValue, typeof pnlValue);
-
-            if (typeof pnlValue !== 'number' || isNaN(pnlValue)) {
-                console.warn('processPnlUpdate: Missing or invalid pnl value', pnlData);
+                console.warn('processPnlUpdate: Invalid message');
                 return;
             }
 
             this.pnlUpdateCount++;
 
-            // Parse timestamp - handle both string and numeric timestamps
-            let parsedTimestamp;
-            if (typeof timestamp === 'string') {
-                parsedTimestamp = new Date(timestamp).getTime();
-            } else if (typeof timestamp === 'number') {
-                parsedTimestamp = timestamp;
-            } else {
-                parsedTimestamp = Date.now();
+            // The message structure is: { type: "pnl_update", client: "TRADER", data: {"pnl": 82.20}, timestamp: "..." }
+            // According to redis_keys_and_channels.md
+            const trader = message.client;
+            const pnlValue = message.data && message.data.pnl;
+            const timestamp = message.timestamp;
+
+            console.log('💰 processPnlUpdate: Extracted - trader:', trader, 'pnlValue:', pnlValue, 'timestamp:', timestamp);
+
+            if (!trader || typeof pnlValue !== 'number') {
+                console.warn('processPnlUpdate: Missing trader or invalid pnl value', message);
+                console.log('💰 processPnlUpdate: Validation failed - trader:', trader, 'pnlValue type:', typeof pnlValue, 'pnlValue:', pnlValue);
+                return;
             }
+
+            console.log('💰 processPnlUpdate: Validation passed, adding to pnlHistory');
 
             let pnlForTrader = this.pnlHistory.get(trader);
             if (!pnlForTrader) {
+                console.log('💰 processPnlUpdate: Creating new array for trader:', trader);
                 pnlForTrader = [];
                 this.pnlHistory.set(trader, pnlForTrader);
             }
 
-            pnlForTrader.push({
-                timestamp: parsedTimestamp,
-                pnl_value: pnlValue
-            });
+            const pnlEntry = {timestamp: timestamp, pnl_value: pnlValue};
+            console.log('💰 processPnlUpdate: Adding entry:', pnlEntry);
+            pnlForTrader.push(pnlEntry);
+
+            console.log('💰 processPnlUpdate: pnlHistory after update:', this.pnlHistory);
+            console.log('💰 processPnlUpdate: Array for trader', trader, 'now has', pnlForTrader.length, 'entries');
 
             this.cleanOldData();
 
@@ -151,6 +143,7 @@ class PnlDataManager {
 
     // Process message from SSE
     processMessage(message) {
+        console.log('🔄 processMessage: Processing message:', message);
         this.messageCount++;
 
         try {
@@ -159,18 +152,18 @@ class PnlDataManager {
                 return null;
             }
 
-            console.log('processMessage received:', message);
+            console.log('🔄 processMessage: Message type:', message.type);
 
             if (message.type === 'position_update') {
-                console.log('Processing position_update');
+                console.log('🔄 processMessage: Detected position_update, calling processPositionUpdate');
                 this.processPositionUpdate(message);
                 return 'position';
             } else if (message.type === 'pnl_update') {
-                console.log('Processing pnl_update');
+                console.log('🔄 processMessage: Detected pnl_update, calling processPnlUpdate');
                 this.processPnlUpdate(message);
                 return 'pnl';
             } else {
-                console.warn('processMessage: Unknown message type:', message.type);
+                console.log('🔄 processMessage: Unknown message type:', message.type);
             }
         } catch (error) {
             console.error('Error in processMessage:', error, message);
@@ -189,30 +182,30 @@ class PnlDataManager {
             let totalPnl = 0;
 
             // Calculate statistics from current positions
-            for (const position of this.currentPositions.values()) {
-                uniqueClients.add(position.trader);
-                if (typeof position.position === 'number' && !isNaN(position.position)) {
-                    totalPositions += Math.abs(position.position);
+            for (const [trader, positionsMap] of this.currentPositions.entries()) {
+                uniqueClients.add(trader);
+                for (const position of positionsMap.values()) {
+                    totalPositions += Math.abs(position);
                 }
             }
 
             // Calculate total PNL from recent history (last entry per trader)
-            for (const [trader, pnlHistory] of this.pnlHistory.entries()) {
-                if (pnlHistory.length > 0) {
+            const latestPnlByTrader = new Map();
+            for (const [trader, pnlData] of this.pnlHistory.entries()) {
+                if (pnlData.length > 0) {
                     // Get the most recent PNL value for this trader
-                    const latestPnl = pnlHistory[pnlHistory.length - 1].pnl_value;
-                    if (typeof latestPnl === 'number' && !isNaN(latestPnl)) {
-                        totalPnl += latestPnl;
-                    }
+                    const latestPnl = pnlData[pnlData.length - 1];
+                    latestPnlByTrader.set(trader, latestPnl.pnl_value);
                 }
             }
+            totalPnl = Array.from(latestPnlByTrader.values()).reduce((sum, pnl) => sum + pnl, 0);
 
             this.cachedStatistics = {
                 messageCount: this.messageCount,
                 positionUpdateCount: this.positionUpdateCount,
                 pnlUpdateCount: this.pnlUpdateCount,
                 totalClients: uniqueClients.size,
-                activePositions: totalPositions,
+                activePositions: this.currentPositions.size,
                 totalPnl: totalPnl.toFixed(2),
                 pnlUpdates: this.pnlUpdateCount
             };
@@ -223,35 +216,61 @@ class PnlDataManager {
 
     // Get current positions for table display
     getCurrentPositions() {
-        return Array.from(this.currentPositions.values())
+        const positions = [];
+        for (const [trader, positionsMap] of this.currentPositions.entries()) {
+            for (const [instrument, position] of positionsMap.entries()) {
+                positions.push({
+                    trader: trader,
+                    instrument: instrument,
+                    position: position
+                });
+            }
+        }
+        return positions
             .sort((a, b) => {
                 // Default sort by trader, then instrument
                 if (a.trader !== b.trader) {
                     return a.trader.localeCompare(b.trader);
                 }
-                return (a.instrument || 'UNKNOWN').localeCompare(b.instrument || 'UNKNOWN');
+                return a.instrument.localeCompare(b.instrument);
             })
             .slice(0, this.last_n_positions_to_show);
     }
 
     // Get PNL history for chart
     getPnlHistory() {
-        const allPnlData = [];
-        for (const [trader, pnlHistory] of this.pnlHistory.entries()) {
-            for (const pnlPoint of pnlHistory) {
-                allPnlData.push({
+        console.log('📊 getPnlHistory: Called, pnlHistory Map:', this.pnlHistory);
+
+        const pnlHistory = [];
+        for (const [trader, pnlData] of this.pnlHistory.entries()) {
+            console.log('📊 getPnlHistory: Processing trader:', trader, 'data:', pnlData);
+
+            pnlData.forEach(pnlEntry => {
+                pnlHistory.push({
                     trader: trader,
-                    timestamp: pnlPoint.timestamp,
-                    pnl_value: pnlPoint.pnl_value
+                    pnl_value: pnlEntry.pnl_value,
+                    timestamp: pnlEntry.timestamp
                 });
-            }
+            });
         }
-        return allPnlData.sort((a, b) => a.timestamp - b.timestamp);
+
+        console.log('📊 getPnlHistory: Returning flattened history:', pnlHistory);
+        return pnlHistory;
     }
 
     // Get unique traders for chart legend
     getUniqueTraders() {
-        return Array.from(this.pnlHistory.keys());
+        console.log('👥 getUniqueTraders: Called, pnlHistory Map:', this.pnlHistory);
+
+        const traders = new Set();
+        for (const [trader, pnlData] of this.pnlHistory.entries()) {
+            console.log('👥 getUniqueTraders: Adding trader:', trader);
+            traders.add(trader);
+        }
+
+        const traderArray = Array.from(traders);
+        console.log('👥 getUniqueTraders: Returning traders:', traderArray);
+        return traderArray;
     }
 
     // Filter positions by search term
@@ -259,10 +278,20 @@ class PnlDataManager {
         if (!searchTerm) return this.getCurrentPositions();
 
         const term = searchTerm.toLowerCase();
-        return Array.from(this.currentPositions.values())
+        const positions = [];
+        for (const [trader, positionsMap] of this.currentPositions.entries()) {
+            for (const [instrument, position] of positionsMap.entries()) {
+                positions.push({
+                    trader: trader,
+                    instrument: instrument,
+                    position: position
+                });
+            }
+        }
+        return positions
             .filter(position =>
                 position.trader.toLowerCase().includes(term) ||
-                (position.instrument || 'UNKNOWN').toLowerCase().includes(term)
+                position.instrument.toLowerCase().includes(term)
             )
             .slice(0, this.last_n_positions_to_show);
     }
@@ -298,10 +327,28 @@ class PnlDataManager {
         });
     }
 
-    // Set chart duration
-    setChartDuration(minutes) {
-        this.CHART_DURATION = minutes * 60 * 1000;
-        this.cleanOldData();
+    // Get recent PNL updates for the table
+    getRecentPnls(limit = 20) {
+        console.log('📈 getRecentPnls: Called, pnlHistory Map:', this.pnlHistory);
+
+        const recentPnls = [];
+        for (const [trader, pnlData] of this.pnlHistory.entries()) {
+            console.log('📈 getRecentPnls: Processing trader:', trader, 'data length:', pnlData.length);
+
+            if (pnlData.length > 0) {
+                // Get the most recent PNL value for this trader
+                const latestPnl = pnlData[pnlData.length - 1];
+                console.log('📈 getRecentPnls: Latest PNL for', trader, ':', latestPnl);
+
+                recentPnls.push({
+                    trader: trader,
+                    pnl: latestPnl.pnl_value
+                });
+            }
+        }
+
+        console.log('📈 getRecentPnls: Returning recent PNLs:', recentPnls);
+        return recentPnls.slice(0, limit);
     }
 }
 

@@ -52,8 +52,15 @@ class PnlChartManager {
             xScale: d3.scaleTime().range([0, width]),
             yScale: d3.scaleLinear().range([height, 0]),
             line: d3.line()
-                .x(d => this.chart.xScale(d.timestamp))
-                .y(d => this.chart.yScale(d.pnl_value))
+                .x(d => {
+                    const timestamp = d.timestamp instanceof Date ? d.timestamp : new Date(d.timestamp);
+                    console.log(`🎨 line.x: Converting timestamp ${d.timestamp} (type: ${typeof d.timestamp}) to ${timestamp}`);
+                    return this.chart.xScale(timestamp);
+                })
+                .y(d => {
+                    console.log(`🎨 line.y: PNL value ${d.pnl_value} scaled to ${this.chart.yScale(d.pnl_value)}`);
+                    return this.chart.yScale(d.pnl_value);
+                })
                 .defined(d => d.pnl_value !== null && d.pnl_value !== undefined)
                 .curve(d3.curveLinear)
         };
@@ -102,7 +109,17 @@ class PnlChartManager {
     }
 
     updateChart(pnlData, traders, chartDuration = null) {
-        if (!this.chart || !this.isInitialized || pnlData.length === 0) return;
+        console.log('🎨 updateChart: Called with pnlData:', pnlData, 'traders:', traders, 'chartDuration:', chartDuration);
+
+        if (!this.chart || !this.isInitialized) {
+            console.log('🎨 updateChart: Chart not initialized');
+            return;
+        }
+
+        if (pnlData.length === 0) {
+            console.log('🎨 updateChart: No PNL data provided, skipping update');
+            return;
+        }
 
         if (chartDuration) {
             this.chartDuration = chartDuration;
@@ -111,23 +128,31 @@ class PnlChartManager {
         const now = Date.now();
         const chartStartTime = now - this.chartDuration;
 
+        console.log('🎨 updateChart: Chart time range:', new Date(chartStartTime), 'to', new Date(now));
+
         // Update scales
         this.chart.xScale.domain([chartStartTime, now]);
 
         // Calculate P&L range for Y axis
         const allPnlValues = pnlData.map(d => d.pnl_value).filter(v => v !== null && v !== undefined);
+        console.log('🎨 updateChart: All PNL values:', allPnlValues);
+
         if (allPnlValues.length > 0) {
             const pnlExtent = d3.extent(allPnlValues);
             const padding = (pnlExtent[1] - pnlExtent[0]) * 0.1 || Math.abs(pnlExtent[0]) * 0.1 || 100;
             this.chart.yScale.domain([pnlExtent[0] - padding, pnlExtent[1] + padding]);
+            console.log('🎨 updateChart: Y-axis domain set to:', [pnlExtent[0] - padding, pnlExtent[1] + padding]);
         } else {
             // Default range when no data
             this.chart.yScale.domain([-1000, 1000]);
+            console.log('🎨 updateChart: Using default Y-axis domain');
         }
 
         this._updateAxes();
         this._updatePnlLines(pnlData, traders);
         this._updateLegend(traders);
+
+        console.log('🎨 updateChart: Chart update complete');
     }
 
     _updateAxes() {
@@ -148,13 +173,19 @@ class PnlChartManager {
     }
 
     _updatePnlLines(pnlData, traders) {
+        console.log('🎨 _updatePnlLines: Called with pnlData:', pnlData);
+        console.log('🎨 _updatePnlLines: traders:', traders);
+        
         // Group data by trader
         const traderData = {};
         traders.forEach(trader => {
             traderData[trader] = pnlData
                 .filter(d => d.trader === trader)
                 .sort((a, b) => a.timestamp - b.timestamp);
+            console.log(`🎨 _updatePnlLines: trader ${trader} has ${traderData[trader].length} data points`);
         });
+        
+        console.log('🎨 _updatePnlLines: traderData:', traderData);
 
         // Update lines for each trader
         const lines = this.chart.linesContainer.selectAll('.pnl-line')
@@ -173,8 +204,14 @@ class PnlChartManager {
             .style('stroke', d => this.colorScale(d))
             .attr('d', d => {
                 const data = traderData[d];
-                if (!data || data.length === 0) return null;
-                return this.chart.line(data);
+                console.log(`🎨 _updatePnlLines: Drawing line for trader ${d}, data:`, data);
+                if (!data || data.length === 0) {
+                    console.log(`🎨 _updatePnlLines: No data for trader ${d}, returning null`);
+                    return null;
+                }
+                const lineD = this.chart.line(data);
+                console.log(`🎨 _updatePnlLines: Generated line path for trader ${d}:`, lineD);
+                return lineD;
             });
     }
 

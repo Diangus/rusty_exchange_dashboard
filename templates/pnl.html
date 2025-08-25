@@ -16,18 +16,10 @@
 <!-- Statistics Cards -->
 <div class="stats bg-slate-800 rounded-lg shadow-xl border border-slate-700 p-6 mb-8" id="pnl-stats">
     <h2 class="text-xl font-semibold text-slate-200 mb-4">Statistics</h2>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-2 gap-4">
         <div class="text-center">
             <div class="text-2xl font-bold text-blue-400" id="totalClients">0</div>
             <div class="text-sm text-slate-400">Total Clients</div>
-        </div>
-        <div class="text-center">
-            <div class="text-2xl font-bold text-emerald-400" id="activePositions">0</div>
-            <div class="text-sm text-slate-400">Active Positions</div>
-        </div>
-        <div class="text-center">
-            <div class="text-2xl font-bold text-violet-400" id="totalPnl">0.00</div>
-            <div class="text-sm text-slate-400">Total P&L</div>
         </div>
         <div class="text-center">
             <div class="text-2xl font-bold text-amber-400" id="pnlUpdates">0</div>
@@ -36,8 +28,58 @@
     </div>
 </div>
 
-<!-- Positions Table -->
+
+<!-- PNL Chart Legend -->
 <div class="bg-slate-800 rounded-lg shadow-xl border border-slate-700 p-6 mb-8">
+    <h2 class="text-xl font-semibold text-slate-200 mb-4">Active Traders Legend</h2>
+    <div id="pnl-legend" class="flex flex-wrap gap-4">
+        <!-- Legend items will be populated by JavaScript -->
+    </div>
+</div>
+
+<!-- PNL Chart -->
+<div class="bg-slate-800 rounded-lg shadow-xl border border-slate-700 p-6">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-slate-200">P&L Over Time</h2>
+        <div class="flex items-center space-x-2">
+            <label class="text-sm text-slate-400">Duration:</label>
+            <select id="chart-duration"
+                class="bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="1">1 minute</option>
+                <option value="5" selected>5 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+            </select>
+        </div>
+    </div>
+    <div id="pnl-chart" class="w-full" style="height: 400px;"></div>
+</div>
+
+<!-- Recent PNL Updates Table -->
+<div class="bg-slate-800 rounded-lg shadow-xl border border-slate-700 p-6 mt-8">
+    <h2 class="text-xl font-semibold text-slate-200 mb-4">Recent P&L Updates</h2>
+
+    <div class="overflow-x-auto">
+        <table class="w-full divide-y divide-slate-600" id="pnl-updates-table">
+            <thead class="bg-slate-700">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        Client
+                    </th>
+                    <th class="px-4 py-3 text-right text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        P&L
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="bg-slate-800 divide-y divide-slate-700" id="pnl-updates-tbody">
+                <!-- P&L updates will be populated by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Positions Table -->
+<div class="bg-slate-800 rounded-lg shadow-xl border border-slate-700 p-6 mt-8">
     <div class="flex justify-between items-center mb-4">
         <h2 class="text-xl font-semibold text-slate-200">Current Positions</h2>
         <div class="flex space-x-2">
@@ -75,32 +117,6 @@
             </tbody>
         </table>
     </div>
-</div>
-
-<!-- PNL Chart Legend -->
-<div class="bg-slate-800 rounded-lg shadow-xl border border-slate-700 p-6 mb-8">
-    <h2 class="text-xl font-semibold text-slate-200 mb-4">Active Traders Legend</h2>
-    <div id="pnl-legend" class="flex flex-wrap gap-4">
-        <!-- Legend items will be populated by JavaScript -->
-    </div>
-</div>
-
-<!-- PNL Chart -->
-<div class="bg-slate-800 rounded-lg shadow-xl border border-slate-700 p-6">
-    <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-semibold text-slate-200">P&L Over Time</h2>
-        <div class="flex items-center space-x-2">
-            <label class="text-sm text-slate-400">Duration:</label>
-            <select id="chart-duration"
-                class="bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="1">1 minute</option>
-                <option value="5" selected>5 minutes</option>
-                <option value="15">15 minutes</option>
-                <option value="30">30 minutes</option>
-            </select>
-        </div>
-    </div>
-    <div id="pnl-chart" class="w-full" style="height: 400px;"></div>
 </div>
 {% endblock %}
 

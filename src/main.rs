@@ -269,6 +269,7 @@ async fn main() -> std::io::Result<()> {
             .route("/", web::get().to(index))
             .route("/dashboard", web::get().to(dashboard))
             .route("/pnl", web::get().to(pnl))
+            .route("/docs", web::get().to(docs))
             .route("/api/instruments", web::get().to(get_instruments))
             // SSE routes - specific routes must come before generic ones
             .route("/sse/pnl", web::get().to(pnl_sse_handler))
@@ -366,6 +367,20 @@ async fn pnl(app_state: web::Data<AppState>) -> Result<actix_web::HttpResponse> 
     ctx.insert("instruments", &instruments);
 
     match app_state.tera.render("pnl.html", &ctx) {
+        Ok(content) => Ok(actix_web::HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(content)),
+        Err(e) => {
+            println!("Template render error: {}", e);
+            Ok(actix_web::HttpResponse::InternalServerError().body("Failed to render template"))
+        }
+    }
+}
+
+async fn docs(app_state: web::Data<AppState>) -> Result<actix_web::HttpResponse> {
+    let ctx = tera::Context::new();
+
+    match app_state.tera.render("docs.html", &ctx) {
         Ok(content) => Ok(actix_web::HttpResponse::Ok()
             .content_type("text/html; charset=utf-8")
             .body(content)),

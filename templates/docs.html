@@ -1,0 +1,563 @@
+{% extends "base.html" %}
+
+{% block title %}API Documentation{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Custom styles for documentation that match the site theme */
+    .docs-container {
+        background-color: rgb(30 41 59);
+        /* slate-800 */
+        border-radius: 0.5rem;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .docs-nav {
+        background-color: rgb(51 65 85);
+        /* slate-700 */
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .docs-nav ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .docs-nav li {
+        margin: 0.5rem 0;
+    }
+
+    .docs-nav a {
+        color: rgb(203 213 225);
+        /* slate-300 */
+        text-decoration: none;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        display: block;
+        transition: all 0.2s;
+    }
+
+    .docs-nav a:hover {
+        background-color: rgb(71 85 105);
+        /* slate-600 */
+        color: white;
+    }
+
+    .docs-nav .class-name {
+        font-weight: 600;
+        color: rgb(96 165 250);
+        /* blue-400 */
+    }
+
+    .docs-nav .function-name {
+        margin-left: 1rem;
+        font-size: 0.9rem;
+    }
+
+    .docs-content {
+        color: rgb(203 213 225);
+        /* slate-300 */
+    }
+
+    .docs-content h1 {
+        color: rgb(96 165 250);
+        /* blue-400 */
+        font-size: 2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid rgb(71 85 105);
+        padding-bottom: 0.5rem;
+    }
+
+    .docs-content h2 {
+        color: rgb(129 140 248);
+        /* indigo-400 */
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin: 2rem 0 1rem 0;
+    }
+
+    .docs-content h3 {
+        color: rgb(167 139 250);
+        /* violet-400 */
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 1.5rem 0 0.75rem 0;
+    }
+
+    .docs-content p {
+        margin-bottom: 1rem;
+        line-height: 1.6;
+    }
+
+    .docs-content code {
+        background-color: rgb(71 85 105);
+        /* slate-600 */
+        color: rgb(248 250 252);
+        /* slate-50 */
+        padding: 0.2rem 0.4rem;
+        border-radius: 0.25rem;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9rem;
+    }
+
+    .docs-content pre {
+        background-color: rgb(15 23 42);
+        /* slate-900 */
+        color: rgb(248 250 252);
+        /* slate-50 */
+        padding: 1rem;
+        border-radius: 0.5rem;
+        overflow-x: auto;
+        margin: 1rem 0;
+        border: 1px solid rgb(71 85 105);
+    }
+
+    .docs-content pre code {
+        background: none;
+        padding: 0;
+    }
+
+    .method-signature {
+        background-color: rgb(15 23 42);
+        /* slate-900 */
+        border: 1px solid rgb(71 85 105);
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin: 1rem 0;
+        font-family: 'Courier New', monospace;
+    }
+
+    .method-name {
+        color: rgb(34 197 94);
+        /* green-500 */
+        font-weight: 600;
+    }
+
+    .method-params {
+        color: rgb(251 191 36);
+        /* amber-400 */
+    }
+
+    .method-return {
+        color: rgb(168 85 247);
+        /* purple-500 */
+    }
+
+    .docstring {
+        background-color: rgb(51 65 85);
+        /* slate-700 */
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-left: 4px solid rgb(96 165 250);
+        /* blue-400 */
+    }
+
+    .params-section {
+        margin: 1rem 0;
+    }
+
+    .params-section h4 {
+        color: rgb(96 165 250);
+        /* blue-400 */
+        margin-bottom: 0.5rem;
+    }
+
+    .param-item {
+        margin: 0.5rem 0;
+        padding-left: 1rem;
+    }
+
+    .param-name {
+        color: rgb(251 191 36);
+        /* amber-400 */
+        font-weight: 600;
+    }
+
+    .param-type {
+        color: rgb(168 85 247);
+        /* purple-500 */
+        font-style: italic;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="header mb-8">
+    <h1 class="text-3xl font-bold text-slate-200 text-center">API Documentation</h1>
+    <p class="text-center text-slate-400 mt-2">Exchange Client Library Documentation</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+    <!-- Navigation Sidebar -->
+    <div class="lg:col-span-1">
+        <div class="docs-nav sticky top-24">
+            <h2 class="text-lg font-semibold text-slate-200 mb-4">Contents</h2>
+            <ul>
+                <li>
+                    <a href="#Exchange" class="class-name">Exchange</a>
+                    <ul>
+                        <li><a href="#Exchange.__init__" class="function-name">__init__()</a></li>
+                        <li><a href="#Exchange.is_connected" class="function-name">is_connected()</a></li>
+                        <li><a href="#Exchange.connect" class="function-name">connect()</a></li>
+                        <li><a href="#Exchange.insert_order" class="function-name">insert_order()</a></li>
+                        <li><a href="#Exchange.cancel_order" class="function-name">cancel_order()</a></li>
+                        <li><a href="#Exchange.cancel_orders_for_instrument"
+                                class="function-name">cancel_orders_for_instrument()</a></li>
+                        <li><a href="#Exchange.cancel_all_orders" class="function-name">cancel_all_orders()</a></li>
+                        <li><a href="#Exchange.get_outstanding_orders"
+                                class="function-name">get_outstanding_orders()</a></li>
+                        <li><a href="#Exchange.get_orderbook" class="function-name">get_orderbook()</a></li>
+                        <li><a href="#Exchange.get_trades" class="function-name">get_trades()</a></li>
+                        <li><a href="#Exchange.get_positions" class="function-name">get_positions()</a></li>
+                        <li><a href="#Exchange.get_cash" class="function-name">get_cash()</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Main Documentation Content -->
+    <div class="lg:col-span-3">
+        <div class="docs-container">
+            <div class="docs-content">
+                <h1 id="Exchange">Exchange Class</h1>
+
+                <div class="docstring">
+                    <p>Synchronous client for connecting to the exchange trading system.</p>
+                    <p>This class provides a synchronous interface to the exchange's execution and market data
+                        endpoints. It handles authentication, order management, and real-time market data access.</p>
+                </div>
+
+                <h2 id="Exchange.__init__">Constructor</h2>
+                <div class="method-signature">
+                    <span class="method-name">__init__</span>(<span class="method-params">self, username: str, password:
+                        str</span>) <span class="method-return">-> None</span>
+                </div>
+                <div class="docstring">
+                    <p>Initialize the Exchange client with authentication credentials.</p>
+                    <div class="params-section">
+                        <h4>Parameters:</h4>
+                        <div class="param-item">
+                            <span class="param-name">username</span> (<span class="param-type">str</span>): Username for
+                            authentication with the exchange
+                        </div>
+                        <div class="param-item">
+                            <span class="param-name">password</span> (<span class="param-type">str</span>): Password for
+                            authentication with the exchange
+                        </div>
+                    </div>
+                </div>
+
+                <h2 id="Exchange.is_connected">is_connected()</h2>
+                <div class="method-signature">
+                    <span class="method-name">is_connected</span>(<span class="method-params">self</span>) <span
+                        class="method-return">-> bool</span>
+                </div>
+                <div class="docstring">
+                    <p>Check if the exchange connection is active.</p>
+                    <div class="params-section">
+                        <h4>Returns:</h4>
+                        <div class="param-item">
+                            <span class="param-type">bool</span>: True if both execution and market data connections are
+                            active, False otherwise
+                        </div>
+                    </div>
+                </div>
+
+                <h2 id="Exchange.connect">connect()</h2>
+                <div class="method-signature">
+                    <span class="method-name">connect</span>(<span class="method-params">self</span>) <span
+                        class="method-return">-> None</span>
+                </div>
+                <div class="docstring">
+                    <p>Establish connection to the exchange and authenticate.</p>
+                    <p>This method starts background threads for execution and market data connections,
+                        waits for connections to be established, and performs authentication.</p>
+                    <div class="params-section">
+                        <h4>Raises:</h4>
+                        <div class="param-item">
+                            <span class="param-name">AssertionError</span>: If already connected
+                        </div>
+                        <div class="param-item">
+                            <span class="param-name">Exception</span>: If connection fails or authentication fails
+                        </div>
+                    </div>
+                </div>
+
+                <h2 id="Exchange.insert_order">insert_order()</h2>
+                <div class="method-signature">
+                    <span class="method-name">insert_order</span>(<span class="method-params">self, instrument: str,
+                        side: str, volume: int, price: float, lifetime: str</span>) <span class="method-return">->
+                        str</span>
+                </div>
+                <div class="docstring">
+                    <p>Submit a new order to the exchange.</p>
+                    <div class="params-section">
+                        <h4>Parameters:</h4>
+                        <div class="param-item">
+                            <span class="param-name">instrument</span> (<span class="param-type">str</span>): The
+                            trading instrument identifier
+                        </div>
+                        <div class="param-item">
+                            <span class="param-name">side</span> (<span class="param-type">str</span>): Order side
+                            ('Buy' or 'Sell')
+                        </div>
+                        <div class="param-item">
+                            <span class="param-name">volume</span> (<span class="param-type">int</span>): Order quantity
+                        </div>
+                        <div class="param-item">
+                            <span class="param-name">price</span> (<span class="param-type">float</span>): Order price
+                        </div>
+                        <div class="param-item">
+                            <span class="param-name">lifetime</span> (<span class="param-type">str</span>): Order
+                            lifetime ('GFD' or 'FAK')
+                        </div>
+                    </div>
+                    <div class="params-section">
+                        <h4>Returns:</h4>
+                        <div class="param-item">
+                            <span class="param-type">str</span>: Order ID assigned by the exchange
+                        </div>
+                    </div>
+                    <div class="params-section">
+                        <h4>Raises:</h4>
+                        <div class="param-item">
+                            <span class="param-name">Exception</span>: If the order is rejected
+                        </div>
+                    </div>
+                </div>
+
+                <h2 id="Exchange.cancel_order">cancel_order()</h2>
+                <div class="method-signature">
+                    <span class="method-name">cancel_order</span>(<span class="method-params">self, order_id:
+                        str</span>) <span class="method-return">-> None</span>
+                </div>
+                <div class="docstring">
+                    <p>Cancel a specific order by ID.</p>
+                    <div class="params-section">
+                        <h4>Parameters:</h4>
+                        <div class="param-item">
+                            <span class="param-name">order_id</span> (<span class="param-type">str</span>): ID of the
+                            order to cancel
+                        </div>
+                    </div>
+                    <div class="params-section">
+                        <h4>Raises:</h4>
+                        <div class="param-item">
+                            <span class="param-name">Exception</span>: If the cancel request is rejected
+                        </div>
+                    </div>
+                </div>
+
+                <h2 id="Exchange.cancel_orders_for_instrument">cancel_orders_for_instrument()</h2>
+                <div class="method-signature">
+                    <span class="method-name">cancel_orders_for_instrument</span>(<span class="method-params">self,
+                        instrument: str</span>) <span class="method-return">-> None</span>
+                </div>
+                <div class="docstring">
+                    <p>Cancel all orders for a specific instrument.</p>
+                    <div class="params-section">
+                        <h4>Parameters:</h4>
+                        <div class="param-item">
+                            <span class="param-name">instrument</span> (<span class="param-type">str</span>): The
+                            instrument identifier
+                        </div>
+                    </div>
+                    <div class="params-section">
+                        <h4>Raises:</h4>
+                        <div class="param-item">
+                            <span class="param-name">Exception</span>: If the mass cancel fails
+                        </div>
+                    </div>
+                </div>
+
+                <h2 id="Exchange.cancel_all_orders">cancel_all_orders()</h2>
+                <div class="method-signature">
+                    <span class="method-name">cancel_all_orders</span>(<span class="method-params">self</span>) <span
+                        class="method-return">-> None</span>
+                </div>
+                <div class="docstring">
+                    <p>Cancel all outstanding orders.</p>
+                    <div class="params-section">
+                        <h4>Raises:</h4>
+                        <div class="param-item">
+                            <span class="param-name">Exception</span>: If the mass cancel fails
+                        </div>
+                    </div>
+                </div>
+
+                <h2 id="Exchange.get_outstanding_orders">get_outstanding_orders()</h2>
+                <div class="method-signature">
+                    <span class="method-name">get_outstanding_orders</span>(<span class="method-params">self,
+                        instrument: str</span>) <span class="method-return">-> dict[str, Orders]</span>
+                </div>
+                <div class="docstring">
+                    <p>Shows all outstanding active orders for the connected client.
+                        Active orders are orders that have not been completely filled or cancelled.
+                    </p>
+                    <div class="params-section">
+                        <h4>Parameters:</h4>
+                        <div class="param-item">
+                            <span class="param-name">instrument</span> (<span class="param-type">str</span>): The
+                            instrument identifier
+                        </div>
+                    </div>
+                    <div class="params-section">
+                        <h4>Returns:</h4>
+                        <div class="param-item">
+                            <span class="param-type">dict[str, Orders]</span>: Dictionary with 'asks' and 'bids' keys
+                            containing all outstanding orders for the specified instrument from all clients that have
+                            not been completely filled or cancelled. Each order object contains:
+                            <ul style="margin-top: 8px;">
+                                <li><strong>client_name</strong> (str): Username/client identifier who placed the order
+                                </li>
+                                <li><strong>instrument</strong> (str): Trading instrument identifier</li>
+                                <li><strong>leaves_qty</strong> (int): Remaining quantity available on the order</li>
+                                <li><strong>price</strong> (float): Order price level</li>
+                                <li><strong>request_id</strong> (str): Unique identifier for the original order request
+                                </li>
+                                <li><strong>side</strong> (str): Order side indicator ("Buy" or "Sell")</li>
+                                <li><strong>timestamp</strong> (str): ISO 8601 timestamp of when the order was last
+                                    updated</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <h2 id="Exchange.get_orderbook">get_orderbook()</h2>
+                <div class="method-signature">
+                    <span class="method-name">get_orderbook</span>(<span class="method-params">self, instrument:
+                        str</span>) <span class="method-return">-> dict[str, Orders]</span>
+                </div>
+                <div class="docstring">
+                    <p>Get the current order book for a specific instrument.</p>
+                    <div class="params-section">
+                        <h4>Parameters:</h4>
+                        <div class="param-item">
+                            <span class="param-name">instrument</span> (<span class="param-type">str</span>): The
+                            instrument identifier
+                        </div>
+                    </div>
+                    <div class="params-section">
+                        <h4>Returns:</h4>
+                        <div class="param-item">
+                            <span class="param-type">dict[str, Orders]</span>: Dictionary with 'asks' and 'bids' keys
+                            containing lists of order objects. Orders are sorted by price (asks ascending, bids
+                            descending) then by timestamp.
+                            Each order object contains:
+                            <ul style="margin-top: 8px;">
+                                <li><strong>client_name</strong> (str): Username/client identifier who placed the order
+                                </li>
+                                <li><strong>instrument</strong> (str): Trading instrument identifier</li>
+                                <li><strong>leaves_qty</strong> (int): Remaining quantity available on the order</li>
+                                <li><strong>price</strong> (float): Order price level</li>
+                                <li><strong>request_id</strong> (str): Unique identifier for the original order request
+                                </li>
+                                <li><strong>side</strong> (str): Order side indicator ("Buy" or "Sell")</li>
+                                <li><strong>timestamp</strong> (str): ISO 8601 timestamp of when the order was last
+                                    updated</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <h2 id="Exchange.get_trades">get_trades()</h2>
+                <div class="method-signature">
+                    <span class="method-name">get_trades</span>(<span class="method-params">self</span>) <span
+                        class="method-return">-> list[dict[str, Any]]</span>
+                </div>
+                <div class="docstring">
+                    <p>Get all trades that have occurred since the last call to this method.</p>
+                    <div class="params-section">
+                        <h4>Returns:</h4>
+                        <div class="param-item">
+                            <span class="param-type">list[dict[str, Any]]</span>: List of trade dictionaries. Each trade
+                            contains:
+                            <ul style="margin-top: 8px;">
+                                <li><strong>buyer</strong> (str): Username of the buying party</li>
+                                <li><strong>buyer_order_id</strong> (str): Request ID of the buyer's original order</li>
+                                <li><strong>instrument</strong> (str): Trading instrument identifier</li>
+                                <li><strong>price</strong> (float): Execution price of the trade</li>
+                                <li><strong>seller</strong> (str): Username of the selling party</li>
+                                <li><strong>seller_order_id</strong> (str): Request ID of the seller's original order
+                                </li>
+                                <li><strong>timestamp</strong> (str): ISO 8601 timestamp of when the trade was executed
+                                </li>
+                                <li><strong>volume</strong> (int): Quantity traded in this execution</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <h2 id="Exchange.get_positions">get_positions()</h2>
+                <div class="method-signature">
+                    <span class="method-name">get_positions</span>(<span class="method-params">self</span>) <span
+                        class="method-return">-> dict[str, int]</span>
+                </div>
+                <div class="docstring">
+                    <p>Get current positions for all instruments.</p>
+                    <div class="params-section">
+                        <h4>Returns:</h4>
+                        <div class="param-item">
+                            <span class="param-type">dict[str, int]</span>: Dictionary mapping instrument names to
+                            position quantities
+                        </div>
+                    </div>
+                </div>
+
+                <h2 id="Exchange.get_cash">get_cash()</h2>
+                <div class="method-signature">
+                    <span class="method-name">get_cash</span>(<span class="method-params">self</span>) <span
+                        class="method-return">-> float</span>
+                </div>
+                <div class="docstring">
+                    <p>Get current cash balance.</p>
+                    <div class="params-section">
+                        <h4>Returns:</h4>
+                        <div class="param-item">
+                            <span class="param-type">float</span>: Current cash balance
+                        </div>
+                    </div>
+                </div>
+
+                <h2>Example Usage</h2>
+                <pre><code># Create client instance
+exchange = Exchange("username", "password")
+
+# Connect to exchange
+exchange.connect()
+
+# Check connection
+if exchange.is_connected():
+    print("Connected to exchange")
+
+# Place an order
+order_id = exchange.insert_order("AAPL", "Buy", 100, 150.50, "GFD")
+print(f"Order placed: {order_id}")
+
+# Get orderbook
+orderbook = exchange.get_orderbook("AAPL")
+print(f"Asks: {orderbook['asks']}")
+print(f"Bids: {orderbook['bids']}")
+
+# Get positions
+positions = exchange.get_positions()
+print(f"Positions: {positions}")
+
+# Cancel the order
+exchange.cancel_order(order_id)
+
+# Cancel all orders
+exchange.cancel_all_orders()
+</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
